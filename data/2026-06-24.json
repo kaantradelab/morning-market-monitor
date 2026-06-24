@@ -2,15 +2,14 @@
   "schema_version": "1.0.0",
   "meta": {
     "date": "2026-06-24",
-    "run_ts_utc": "2026-06-24T17:24:39Z",
+    "run_ts_utc": "2026-06-24T17:49:41Z",
     "config_hash": "1e9ad7396383",
     "vol_model": "ewma",
     "percentile_window": "3y",
     "fpr_control": "fdr",
     "calm_morning": false,
     "degraded_sources": [
-      "breadth_200dma",
-      "calendar:FMP 403 (auth/paid-tier)"
+      "breadth_200dma"
     ]
   },
   "composites": {
@@ -1129,14 +1128,14 @@
       "axis": 1,
       "label": "S&P 500 / ES",
       "source": "yfinance:ES=F",
-      "value": 7445.25,
-      "change": 0.001041,
+      "value": 7420.25,
+      "change": -0.002322,
       "transform": "log_return",
-      "ewma_z": 0.102292,
-      "pct_1y": 10.31746,
-      "pct_3y": 11.405836,
-      "level_pct_756": 97.748344,
-      "robust_z": 0.022363,
+      "ewma_z": -0.228065,
+      "pct_1y": 21.031746,
+      "pct_3y": 22.281167,
+      "level_pct_756": 96.821192,
+      "robust_z": -0.463894,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -1262,7 +1261,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 7445.25
+          "value": 7420.25
         }
       ],
       "is_front_screen": true,
@@ -1273,14 +1272,14 @@
       "axis": 1,
       "label": "VIX",
       "source": "yfinance:^VIX",
-      "value": 19.16,
-      "change": -0.33,
+      "value": 20.09,
+      "change": 0.6,
       "transform": "first_diff",
-      "ewma_z": -0.182289,
-      "pct_1y": 23.809524,
-      "pct_3y": 22.606383,
-      "level_pct_756": 77.822045,
-      "robust_z": -0.282484,
+      "ewma_z": 0.331435,
+      "pct_1y": 37.698413,
+      "pct_3y": 38.297872,
+      "level_pct_756": 82.868526,
+      "robust_z": 0.77739,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -1406,7 +1405,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 19.15999984741211
+          "value": 20.09000015258789
         }
       ],
       "is_front_screen": true,
@@ -2425,25 +2424,21 @@
       "axis": 6,
       "label": "USDJPY",
       "source": "yfinance:JPY=X",
-      "value": 161.570007,
-      "change": 0.000848,
+      "value": 161.794006,
+      "change": 0.001385,
       "transform": "log_return",
-      "ewma_z": 0.31396,
-      "pct_1y": 25.793651,
-      "pct_3y": 28.835979,
-      "level_pct_756": 99.73545,
-      "robust_z": 0.062644,
+      "ewma_z": 0.527184,
+      "pct_1y": 48.412698,
+      "pct_3y": 47.089947,
+      "level_pct_756": 100.0,
+      "robust_z": 0.17716,
       "color": "green",
       "staleness": {
-        "asof": "2026-06-23",
+        "asof": "2026-06-24",
         "lag_desc": "EOD delayed",
         "is_stale": false
       },
       "history": [
-        {
-          "date": "2026-05-13",
-          "value": 157.67100524902344
-        },
         {
           "date": "2026-05-14",
           "value": 157.8509979248047
@@ -2559,6 +2554,10 @@
         {
           "date": "2026-06-23",
           "value": 161.57000732421875
+        },
+        {
+          "date": "2026-06-24",
+          "value": 161.79400634765625
         }
       ],
       "is_front_screen": true,
@@ -2569,14 +2568,14 @@
       "axis": 7,
       "label": "Brent",
       "source": "yfinance:BZ=F",
-      "value": 74.07,
-      "change": -0.039833,
+      "value": 73.739998,
+      "change": -0.044299,
       "transform": "log_return",
-      "ewma_z": -1.207601,
-      "pct_1y": 80.555556,
-      "pct_3y": 79.708223,
-      "level_pct_756": 40.794702,
-      "robust_z": -2.319842,
+      "ewma_z": -1.34297,
+      "pct_1y": 84.52381,
+      "pct_3y": 84.217507,
+      "level_pct_756": 39.470199,
+      "robust_z": -2.574891,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -2702,7 +2701,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 74.06999969482422
+          "value": 73.73999786376953
         }
       ],
       "is_front_screen": false,
@@ -2713,14 +2712,14 @@
       "axis": 7,
       "label": "Copper / Gold ratio",
       "source": "derived:ratio:yfinance:HG=F/yfinance:GC=F",
-      "value": 0.001479,
-      "change": -8e-06,
+      "value": 0.001483,
+      "change": -4e-06,
       "transform": "ratio",
-      "ewma_z": -0.371661,
-      "pct_1y": 46.428571,
-      "pct_3y": 37.317397,
-      "level_pct_756": 35.941645,
-      "robust_z": -0.368936,
+      "ewma_z": -0.183098,
+      "pct_1y": 24.603175,
+      "pct_3y": 19.654714,
+      "level_pct_756": 36.206897,
+      "robust_z": -0.16668,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -2846,7 +2845,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 0.0014788627590660802
+          "value": 0.0014829713895100362
         }
       ],
       "is_front_screen": false,
@@ -2857,14 +2856,14 @@
       "axis": 8,
       "label": "VIX / VIX3M",
       "source": "derived:ratio:yfinance:^VIX/yfinance:^VIX3M",
-      "value": 0.92204,
-      "change": 0.084023,
+      "value": 0.946302,
+      "change": 0.108285,
       "transform": "ratio",
-      "ewma_z": 1.741206,
-      "pct_1y": 94.047619,
-      "pct_3y": 91.588785,
-      "level_pct_756": 71.6,
-      "robust_z": 3.940276,
+      "ewma_z": 2.243988,
+      "pct_1y": 96.825397,
+      "pct_3y": 96.128171,
+      "level_pct_756": 79.866667,
+      "robust_z": 5.049573,
       "color": "red",
       "staleness": {
         "asof": "2026-06-24",
@@ -2990,7 +2989,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 0.9220403856735909
+          "value": 0.9463024298526032
         }
       ],
       "is_front_screen": true,
@@ -3168,14 +3167,14 @@
       "axis": 10,
       "label": "RSP/SPY (equal vs cap weight)",
       "source": "derived:ratio:yfinance:RSP/yfinance:SPY",
-      "value": 0.286482,
-      "change": 0.001728,
+      "value": 0.286463,
+      "change": 0.001709,
       "transform": "ratio",
-      "ewma_z": 1.091063,
+      "ewma_z": 1.079172,
       "pct_1y": 69.047619,
-      "pct_3y": 72.037284,
+      "pct_3y": 71.904128,
       "level_pct_756": 18.085106,
-      "robust_z": 1.375759,
+      "robust_z": 1.361678,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -3301,7 +3300,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 0.2864819163660858
+          "value": 0.2864630870162725
         }
       ],
       "is_front_screen": true,
@@ -3600,14 +3599,14 @@
       "axis": 11,
       "label": "SRF take-up",
       "source": "nyfed:srf",
-      "value": 0.0,
-      "change": 0.0,
+      "value": 0.004,
+      "change": 0.004,
       "transform": "level",
       "ewma_z": null,
       "pct_1y": null,
       "pct_3y": null,
-      "level_pct_756": 40.0,
-      "robust_z": -0.6745,
+      "level_pct_756": 70.625,
+      "robust_z": 2.0235,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -3733,7 +3732,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 0.0
+          "value": 0.004
         }
       ],
       "is_front_screen": true,
@@ -3744,14 +3743,14 @@
       "axis": 12,
       "label": "BTC",
       "source": "yfinance:BTC-USD",
-      "value": 59473.988281,
-      "change": -0.052312,
+      "value": 59314.011719,
+      "change": -0.055006,
       "transform": "log_return",
-      "ewma_z": -2.592409,
+      "ewma_z": -2.725889,
       "pct_1y": 97.619048,
-      "pct_3y": 96.560847,
-      "level_pct_756": 5.291005,
-      "robust_z": -2.936922,
+      "pct_3y": 96.957672,
+      "level_pct_756": 5.026455,
+      "robust_z": -3.088127,
       "color": "amber",
       "staleness": {
         "asof": "2026-06-24",
@@ -3877,7 +3876,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 59473.98828125
+          "value": 59314.01171875
         }
       ],
       "is_front_screen": false,
@@ -4050,9 +4049,9 @@
   "plumbing_flags": [
     {
       "name": "srf_takeup",
-      "value": 0.0,
-      "triggered": false,
-      "note": "SRF take-up at/near zero",
+      "value": 0.004,
+      "triggered": true,
+      "note": "SRF take-up 0.0bn off zero = funding stress",
       "staleness": {
         "asof": "2026-06-24",
         "lag_desc": "NY Fed daily ops",
@@ -4085,27 +4084,27 @@
   "corr_breaks": [
     {
       "name": "gold_vs_realyield_usd",
-      "residual_z": -0.3653,
+      "residual_z": -0.1789,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "residual -0.37 EWMA-sigma, persisted 0d (need 3d)"
+      "note": "residual -0.18 EWMA-sigma, persisted 0d (need 3d)"
     },
     {
       "name": "hy_oas_vs_acwi_vix",
-      "residual_z": 1.4942,
+      "residual_z": 1.5937,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "residual +1.49 EWMA-sigma, persisted 0d (need 3d)"
+      "note": "residual +1.59 EWMA-sigma, persisted 0d (need 3d)"
     },
     {
       "name": "stock_bond_corr",
-      "residual_z": 0.073,
+      "residual_z": -0.2589,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "residual +0.07 EWMA-sigma, persisted 0d (need 3d)"
+      "note": "residual -0.26 EWMA-sigma, persisted 0d (need 3d)"
     }
   ],
   "dog_didnt_bark": []
