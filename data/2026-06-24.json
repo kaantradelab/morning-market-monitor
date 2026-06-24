@@ -2,16 +2,15 @@
   "schema_version": "1.0.0",
   "meta": {
     "date": "2026-06-24",
-    "run_ts_utc": "2026-06-24T16:46:07Z",
+    "run_ts_utc": "2026-06-24T17:24:39Z",
     "config_hash": "1e9ad7396383",
     "vol_model": "ewma",
     "percentile_window": "3y",
     "fpr_control": "fdr",
-    "calm_morning": true,
+    "calm_morning": false,
     "degraded_sources": [
-      "usd_broad",
       "breadth_200dma",
-      "srf_takeup"
+      "calendar:FMP 403 (auth/paid-tier)"
     ]
   },
   "composites": {
@@ -1130,14 +1129,14 @@
       "axis": 1,
       "label": "S&P 500 / ES",
       "source": "yfinance:ES=F",
-      "value": 7473.75,
-      "change": 0.004862,
+      "value": 7445.25,
+      "change": 0.001041,
       "transform": "log_return",
-      "ewma_z": 0.477549,
-      "pct_1y": 42.460317,
-      "pct_3y": 43.236074,
-      "level_pct_756": 98.145695,
-      "robust_z": 0.578227,
+      "ewma_z": 0.102292,
+      "pct_1y": 10.31746,
+      "pct_3y": 11.405836,
+      "level_pct_756": 97.748344,
+      "robust_z": 0.022363,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -1263,7 +1262,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 7473.75
+          "value": 7445.25
         }
       ],
       "is_front_screen": true,
@@ -1274,14 +1273,14 @@
       "axis": 1,
       "label": "VIX",
       "source": "yfinance:^VIX",
-      "value": 18.440001,
-      "change": -1.049999,
+      "value": 19.16,
+      "change": -0.33,
       "transform": "first_diff",
-      "ewma_z": -0.580011,
-      "pct_1y": 56.349206,
-      "pct_3y": 57.047872,
-      "level_pct_756": 73.173971,
-      "robust_z": -1.112635,
+      "ewma_z": -0.182289,
+      "pct_1y": 23.809524,
+      "pct_3y": 22.606383,
+      "level_pct_756": 77.822045,
+      "robust_z": -0.282484,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -1407,7 +1406,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 18.440000534057617
+          "value": 19.15999984741211
         }
       ],
       "is_front_screen": true,
@@ -2293,7 +2292,7 @@
       "color": "red",
       "staleness": {
         "asof": "2026-06-18",
-        "lag_desc": "FRED daily",
+        "lag_desc": "Fed H.10 broad $ (multi-day lag)",
         "is_stale": false
       },
       "history": [
@@ -2426,21 +2425,25 @@
       "axis": 6,
       "label": "USDJPY",
       "source": "yfinance:JPY=X",
-      "value": 161.731995,
-      "change": 0.001002,
+      "value": 161.570007,
+      "change": 0.000848,
       "transform": "log_return",
-      "ewma_z": 0.381312,
-      "pct_1y": 34.920635,
-      "pct_3y": 35.31746,
-      "level_pct_756": 100.0,
-      "robust_z": 0.094136,
+      "ewma_z": 0.31396,
+      "pct_1y": 25.793651,
+      "pct_3y": 28.835979,
+      "level_pct_756": 99.73545,
+      "robust_z": 0.062644,
       "color": "green",
       "staleness": {
-        "asof": "2026-06-24",
+        "asof": "2026-06-23",
         "lag_desc": "EOD delayed",
         "is_stale": false
       },
       "history": [
+        {
+          "date": "2026-05-13",
+          "value": 157.67100524902344
+        },
         {
           "date": "2026-05-14",
           "value": 157.8509979248047
@@ -2556,10 +2559,6 @@
         {
           "date": "2026-06-23",
           "value": 161.57000732421875
-        },
-        {
-          "date": "2026-06-24",
-          "value": 161.73199462890625
         }
       ],
       "is_front_screen": true,
@@ -2570,14 +2569,14 @@
       "axis": 7,
       "label": "Brent",
       "source": "yfinance:BZ=F",
-      "value": 74.220001,
-      "change": -0.03781,
+      "value": 74.07,
+      "change": -0.039833,
       "transform": "log_return",
-      "ewma_z": -1.146268,
-      "pct_1y": 78.571429,
-      "pct_3y": 77.851459,
-      "level_pct_756": 41.192053,
-      "robust_z": -2.204285,
+      "ewma_z": -1.207601,
+      "pct_1y": 80.555556,
+      "pct_3y": 79.708223,
+      "level_pct_756": 40.794702,
+      "robust_z": -2.319842,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -2703,7 +2702,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 74.22000122070312
+          "value": 74.06999969482422
         }
       ],
       "is_front_screen": false,
@@ -2717,11 +2716,11 @@
       "value": 0.001479,
       "change": -8e-06,
       "transform": "ratio",
-      "ewma_z": -0.381829,
-      "pct_1y": 47.222222,
-      "pct_3y": 38.379814,
+      "ewma_z": -0.371661,
+      "pct_1y": 46.428571,
+      "pct_3y": 37.317397,
       "level_pct_756": 35.941645,
-      "robust_z": -0.379843,
+      "robust_z": -0.368936,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -2847,7 +2846,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 0.0014786411957007463
+          "value": 0.0014788627590660802
         }
       ],
       "is_front_screen": false,
@@ -2858,15 +2857,15 @@
       "axis": 8,
       "label": "VIX / VIX3M",
       "source": "derived:ratio:yfinance:^VIX/yfinance:^VIX3M",
-      "value": 0.903036,
-      "change": 0.065019,
+      "value": 0.92204,
+      "change": 0.084023,
       "transform": "ratio",
-      "ewma_z": 1.347385,
-      "pct_1y": 86.507937,
-      "pct_3y": 84.379172,
-      "level_pct_756": 63.333333,
-      "robust_z": 3.071378,
-      "color": "green",
+      "ewma_z": 1.741206,
+      "pct_1y": 94.047619,
+      "pct_3y": 91.588785,
+      "level_pct_756": 71.6,
+      "robust_z": 3.940276,
+      "color": "red",
       "staleness": {
         "asof": "2026-06-24",
         "lag_desc": "EOD delayed",
@@ -2991,7 +2990,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 0.9030362617610881
+          "value": 0.9220403856735909
         }
       ],
       "is_front_screen": true,
@@ -3162,21 +3161,21 @@
       },
       "history": [],
       "is_front_screen": true,
-      "note": null
+      "note": "KNOWN-UNAVAILABLE: no clean free %>200DMA feed (StockCharts $SPXA200R gated); BREADTH axis covered by rsp_spy"
     },
     {
       "key": "rsp_spy",
       "axis": 10,
       "label": "RSP/SPY (equal vs cap weight)",
       "source": "derived:ratio:yfinance:RSP/yfinance:SPY",
-      "value": 0.286182,
-      "change": 0.001428,
+      "value": 0.286482,
+      "change": 0.001728,
       "transform": "ratio",
-      "ewma_z": 0.901669,
-      "pct_1y": 64.285714,
-      "pct_3y": 65.778961,
-      "level_pct_756": 17.68617,
-      "robust_z": 1.151483,
+      "ewma_z": 1.091063,
+      "pct_1y": 69.047619,
+      "pct_3y": 72.037284,
+      "level_pct_756": 18.085106,
+      "robust_z": 1.375759,
       "color": "green",
       "staleness": {
         "asof": "2026-06-24",
@@ -3302,7 +3301,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 0.2861820095920561
+          "value": 0.2864819163660858
         }
       ],
       "is_front_screen": true,
@@ -3601,21 +3600,142 @@
       "axis": 11,
       "label": "SRF take-up",
       "source": "nyfed:srf",
-      "value": null,
-      "change": null,
+      "value": 0.0,
+      "change": 0.0,
       "transform": "level",
       "ewma_z": null,
       "pct_1y": null,
       "pct_3y": null,
-      "level_pct_756": null,
-      "robust_z": null,
-      "color": "gray",
+      "level_pct_756": 40.0,
+      "robust_z": -0.6745,
+      "color": "green",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-24",
         "lag_desc": "NY Fed daily ops",
-        "is_stale": true
+        "is_stale": false
       },
-      "history": [],
+      "history": [
+        {
+          "date": "2026-05-12",
+          "value": 0.101
+        },
+        {
+          "date": "2026-05-13",
+          "value": 0.004
+        },
+        {
+          "date": "2026-05-14",
+          "value": 0.0
+        },
+        {
+          "date": "2026-05-15",
+          "value": 0.0
+        },
+        {
+          "date": "2026-05-18",
+          "value": 0.001
+        },
+        {
+          "date": "2026-05-19",
+          "value": 0.003
+        },
+        {
+          "date": "2026-05-20",
+          "value": 0.007
+        },
+        {
+          "date": "2026-05-21",
+          "value": 0.003
+        },
+        {
+          "date": "2026-05-22",
+          "value": 0.3
+        },
+        {
+          "date": "2026-05-26",
+          "value": 0.031
+        },
+        {
+          "date": "2026-05-27",
+          "value": 0.11100000000000002
+        },
+        {
+          "date": "2026-05-28",
+          "value": 0.001
+        },
+        {
+          "date": "2026-05-29",
+          "value": 0.005
+        },
+        {
+          "date": "2026-06-01",
+          "value": 0.0
+        },
+        {
+          "date": "2026-06-02",
+          "value": 0.012
+        },
+        {
+          "date": "2026-06-03",
+          "value": 0.004
+        },
+        {
+          "date": "2026-06-04",
+          "value": 0.003
+        },
+        {
+          "date": "2026-06-05",
+          "value": 0.004
+        },
+        {
+          "date": "2026-06-08",
+          "value": 0.0
+        },
+        {
+          "date": "2026-06-09",
+          "value": 0.10300000000000001
+        },
+        {
+          "date": "2026-06-10",
+          "value": 0.004
+        },
+        {
+          "date": "2026-06-11",
+          "value": 0.001
+        },
+        {
+          "date": "2026-06-12",
+          "value": 0.0
+        },
+        {
+          "date": "2026-06-15",
+          "value": 0.001
+        },
+        {
+          "date": "2026-06-16",
+          "value": 0.021
+        },
+        {
+          "date": "2026-06-17",
+          "value": 0.002
+        },
+        {
+          "date": "2026-06-18",
+          "value": 0.001
+        },
+        {
+          "date": "2026-06-22",
+          "value": 0.0
+        },
+        {
+          "date": "2026-06-23",
+          "value": 0.0
+        },
+        {
+          "date": "2026-06-24",
+          "value": 0.0
+        }
+      ],
       "is_front_screen": true,
       "note": "rising off ~0 = stress"
     },
@@ -3624,14 +3744,14 @@
       "axis": 12,
       "label": "BTC",
       "source": "yfinance:BTC-USD",
-      "value": 60097.371094,
-      "change": -0.041885,
+      "value": 59473.988281,
+      "change": -0.052312,
       "transform": "log_return",
-      "ewma_z": -2.075681,
-      "pct_1y": 94.444444,
-      "pct_3y": 94.444444,
-      "level_pct_756": 5.820106,
-      "robust_z": -2.351573,
+      "ewma_z": -2.592409,
+      "pct_1y": 97.619048,
+      "pct_3y": 96.560847,
+      "level_pct_756": 5.291005,
+      "robust_z": -2.936922,
       "color": "amber",
       "staleness": {
         "asof": "2026-06-24",
@@ -3757,7 +3877,7 @@
         },
         {
           "date": "2026-06-24",
-          "value": 60097.37109375
+          "value": 59473.98828125
         }
       ],
       "is_front_screen": false,
@@ -3911,18 +4031,18 @@
   "cards": [
     {
       "title": "Fed Broad USD (DTWEXBGS) anomaly",
-      "metric": "Fed Broad USD (DTWEXBGS) +0.01 (fred:DTWEXBGS)",
+      "metric": "Fed Broad USD (DTWEXBGS) +0.84% (fred:DTWEXBGS)",
       "score_desc": "99th pct / +3.4-sigma; level 35th pct of 3y",
       "why_now": {
         "percentile_or_z": "99th pct / +3.4-sigma",
         "calendar_event": null,
-        "cross_asset_confirm_or_contradict": "confirmed by HY OAS (BAMLH0A0HYM2) + BTC (but contradicted by 10Y Real (DFII10))"
+        "cross_asset_confirm_or_contradict": "confirmed by HY OAS (BAMLH0A0HYM2) + VIX / VIX3M + BTC (but contradicted by 10Y Real (DFII10))"
       },
       "color": "red",
       "is_banner": false,
       "tile_keys": [
         "usd_broad",
-        "btc"
+        "vix_term"
       ]
     }
   ],
@@ -3930,13 +4050,13 @@
   "plumbing_flags": [
     {
       "name": "srf_takeup",
-      "value": null,
+      "value": 0.0,
       "triggered": false,
       "note": "SRF take-up at/near zero",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-24",
         "lag_desc": "NY Fed daily ops",
-        "is_stale": true
+        "is_stale": false
       }
     },
     {
@@ -3965,27 +4085,27 @@
   "corr_breaks": [
     {
       "name": "gold_vs_realyield_usd",
-      "residual_z": -0.3754,
+      "residual_z": -0.3653,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "residual -0.38 EWMA-sigma, persisted 0d (need 3d)"
+      "note": "residual -0.37 EWMA-sigma, persisted 0d (need 3d)"
     },
     {
       "name": "hy_oas_vs_acwi_vix",
-      "residual_z": 1.4103,
+      "residual_z": 1.4942,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "residual +1.41 EWMA-sigma, persisted 0d (need 3d)"
+      "note": "residual +1.49 EWMA-sigma, persisted 0d (need 3d)"
     },
     {
       "name": "stock_bond_corr",
-      "residual_z": 0.4513,
+      "residual_z": 0.073,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "residual +0.45 EWMA-sigma, persisted 0d (need 3d)"
+      "note": "residual +0.07 EWMA-sigma, persisted 0d (need 3d)"
     }
   ],
   "dog_didnt_bark": []
