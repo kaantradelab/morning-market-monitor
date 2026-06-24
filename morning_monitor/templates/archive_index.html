@@ -1,0 +1,49 @@
+{# Archive browse page. `entries` = list of {date, n_cards, n_reds, calm_morning,
+   degraded} summaries, newest first. Lives at site/archive/index.html, so day
+   pages are siblings (<date>.html) and the latest is ../index.html. #}
+{% extends "base.html" %}
+{% block title %}Morning Monitor — Archive{% endblock %}
+
+{% block meta %}
+  <div class="metabar">
+    <span><b>Archive</b></span>
+    <span class="sep">·</span>
+    <span>{{ entries | length }} day{{ '' if entries | length == 1 else 's' }}</span>
+    <span class="nav">
+      {% if entries %}
+      <label>jump
+        <select class="datejump" onchange="if(this.value)window.location.href=this.value;">
+          <option value="">— select —</option>
+          {% for e in entries %}
+            <option value="{{ e.date }}.html">{{ e.date }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+      <a href="../index.html">latest</a>
+    </span>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <section id="archive">
+    <h2 class="section">History</h2>
+    {% if entries %}
+      <ul class="archive-list">
+        {% for e in entries %}
+          <li>
+            <span class="d"><a href="{{ e.date }}.html">{{ e.date }}</a></span>
+            <span class="am">{{ e.n_cards }} card{{ '' if e.n_cards == 1 else 's' }}</span>
+            <span class="am">{{ e.n_reds }} red{{ '' if e.n_reds == 1 else 's' }}</span>
+            {% if e.calm_morning %}<span class="badge bg-green color-green">calm</span>{% endif %}
+            {% if e.degraded %}<span class="badge bg-amber color-amber">degraded</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">No archived briefs yet.</p>
+    {% endif %}
+  </section>
+{% endblock %}
+
+{% block footer %}<span><a href="../index.html">Latest</a></span>{% endblock %}

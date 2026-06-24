@@ -1,0 +1,105 @@
+name: morning-brief
+
+# Runs once a morning + on-demand.
+#
+#   cron "0 6 * * *" UTC = 09:00 Istanbul (Turkey is permanently UTC+3, no DST).
+#
+# NOTE: GitHub scheduled crons are *best-effort* — under load they may fire a few
+# minutes (occasionally more) late, and on very rare occasions be skipped. That is
+# acceptable for a once-a-morning brief on EOD/snapshot data. Use the
+# workflow_dispatch trigger below for a guaranteed manual run.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Logical brief date (YYYY-MM-DD, Istanbul). Blank = today."
+        required: false
+        default: ""
+
+permissions:
+  contents: write   # commit the per-day JSON back to the repo (durable history)
+  pages: write      # deploy the rendered static site to GitHub Pages
+  id-token: write   # required by actions/deploy-pages (OIDC)
+
+# Never run two morning briefs at once; let a running deploy finish (don't cancel
+# a half-deployed Pages publish).
+concurrency:
+  group: morning-brief
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so the per-day JSON commit can fast-forward push cleanly.
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run morning monitor (ingest -> enrich -> brief -> render)
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        run: |
+          # The pipeline is graceful-degradation by design: a dead data source
+          # becomes a stale/missing tile, it does NOT abort the run. Exit 0 even
+          # when degraded; only an unrecoverable config error is non-zero.
+          python -m morning_monitor.main --config config.yaml \
+            ${{ github.event.inputs.date && format('--date {0}', github.event.inputs.date) || '' }}
+
+      # ---- Deploy the site FIRST so the publish is never a hostage to git push. ----
+      # The per-day JSON commit-back (below) is durable history, not a publish
+      # prerequisite — a transient concurrent-push race must not block the brief
+      # from reaching the site. Deploy, then commit-back as a NON-GATING step.
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # render.py writes site/index.html + site/archive/<date>.html and
+          # recreates site/.nojekyll each run; the whole site/ tree ships in the
+          # artifact even though site/ is gitignored.
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Commit per-day JSON (durable history)
+        # Non-gating: a failed commit-back must NOT fail the job — the site is
+        # already deployed above. Tomorrow's run re-commits any missed JSON.
+        continue-on-error: true
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Only the durable per-day records under data/ are committed.
+          # The rendered site/ is a CI build artifact (gitignored) — never committed.
+          git add data/
+          if git diff --staged --quiet; then
+            echo "No new brief JSON to commit."
+          else
+            git commit -m "data: morning brief $(date -u +%Y-%m-%d) [skip ci]"
+            # Rebase onto any concurrent push; abort a conflicted rebase cleanly
+            # rather than leaving a mid-rebase tree. Never force-push.
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || git rebase --abort || true
+            git push origin "HEAD:${GITHUB_REF_NAME}" || echo "commit-back push failed (non-fatal); next run will retry"
+          fi

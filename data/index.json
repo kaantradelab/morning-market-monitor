@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "days": [
+    {
+      "date": "2026-06-24",
+      "run_ts_utc": "2026-06-24T16:25:37Z",
+      "calm_morning": true,
+      "red_count": 0,
+      "card_count": 0,
+      "degraded_sources": [
+        "move_delayed_example_degraded"
+      ],
+      "file": "2026-06-24.json"
+    }
+  ]
+}

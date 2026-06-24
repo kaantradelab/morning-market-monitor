@@ -1,0 +1,212 @@
+{
+  "_comment": "Offline fixture for dry-running the pipeline WITHOUT live API keys. Shape matches load_fixture(): {date, series:{key->RawSeries.to_dict()}, calendar:[CalendarEvent.to_dict()]}. History is short (5 days) for readability; real runs pull >=3y. Values are plausible 2026-06 readings, not real prints.",
+  "date": "2026-06-24",
+  "series": {
+    "ofr_fsi": {
+      "key": "ofr_fsi", "source": "ofr:fsi", "asof": "2026-06-20", "lag_desc": "OFR 2-bd lag", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-16", "value": -1.10}, {"date": "2026-06-17", "value": -1.05},
+        {"date": "2026-06-18", "value": -0.98}, {"date": "2026-06-19", "value": -0.90},
+        {"date": "2026-06-20", "value": -0.40}
+      ]
+    },
+    "nfci": {
+      "key": "nfci", "source": "fred:NFCI", "asof": "2026-06-20", "lag_desc": "NFCI weekly", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-05-23", "value": -0.55}, {"date": "2026-05-30", "value": -0.54},
+        {"date": "2026-06-06", "value": -0.52}, {"date": "2026-06-13", "value": -0.50},
+        {"date": "2026-06-20", "value": -0.45}
+      ]
+    },
+    "spx": {
+      "key": "spx", "source": "yfinance:ES=F", "asof": "2026-06-23", "lag_desc": "EOD delayed", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 5980.0}, {"date": "2026-06-18", "value": 6005.0},
+        {"date": "2026-06-19", "value": 6010.0}, {"date": "2026-06-20", "value": 5995.0},
+        {"date": "2026-06-23", "value": 5930.0}
+      ]
+    },
+    "vix": {
+      "key": "vix", "source": "yfinance:^VIX", "asof": "2026-06-23", "lag_desc": "EOD delayed", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 13.8}, {"date": "2026-06-18", "value": 13.5},
+        {"date": "2026-06-19", "value": 13.9}, {"date": "2026-06-20", "value": 14.4},
+        {"date": "2026-06-23", "value": 18.6}
+      ]
+    },
+    "ust_2y": {
+      "key": "ust_2y", "source": "fred:DGS2", "asof": "2026-06-23", "lag_desc": "FRED daily", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 3.88}, {"date": "2026-06-18", "value": 3.90},
+        {"date": "2026-06-19", "value": 3.91}, {"date": "2026-06-20", "value": 3.89},
+        {"date": "2026-06-23", "value": 3.85}
+      ]
+    },
+    "real_10y": {
+      "key": "real_10y", "source": "fred:DFII10", "asof": "2026-06-23", "lag_desc": "FRED daily", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 1.95}, {"date": "2026-06-18", "value": 1.96},
+        {"date": "2026-06-19", "value": 1.97}, {"date": "2026-06-20", "value": 1.96},
+        {"date": "2026-06-23", "value": 1.94}
+      ]
+    },
+    "breakeven_10y": {
+      "key": "breakeven_10y", "source": "fred:T10YIE", "asof": "2026-06-23", "lag_desc": "FRED daily", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 2.30}, {"date": "2026-06-18", "value": 2.31},
+        {"date": "2026-06-19", "value": 2.31}, {"date": "2026-06-20", "value": 2.32},
+        {"date": "2026-06-23", "value": 2.33}
+      ]
+    },
+    "curve_2s10s": {
+      "key": "curve_2s10s", "source": "fred:T10Y2Y", "asof": "2026-06-23", "lag_desc": "FRED daily", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 0.42}, {"date": "2026-06-18", "value": 0.41},
+        {"date": "2026-06-19", "value": 0.40}, {"date": "2026-06-20", "value": 0.42},
+        {"date": "2026-06-23", "value": 0.45}
+      ]
+    },
+    "hy_oas": {
+      "key": "hy_oas", "source": "fred:BAMLH0A0HYM2", "asof": "2026-06-23", "lag_desc": "FRED daily", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 3.05}, {"date": "2026-06-18", "value": 3.06},
+        {"date": "2026-06-19", "value": 3.08}, {"date": "2026-06-20", "value": 3.12},
+        {"date": "2026-06-23", "value": 3.40}
+      ]
+    },
+    "ig_oas": {
+      "key": "ig_oas", "source": "fred:BAMLC0A0CM", "asof": "2026-06-23", "lag_desc": "FRED daily", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 0.88}, {"date": "2026-06-18", "value": 0.88},
+        {"date": "2026-06-19", "value": 0.89}, {"date": "2026-06-20", "value": 0.90},
+        {"date": "2026-06-23", "value": 0.96}
+      ]
+    },
+    "usd_broad": {
+      "key": "usd_broad", "source": "fred:DTWEXBGS", "asof": "2026-06-20", "lag_desc": "FRED daily (1-bd lag)", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-16", "value": 121.5}, {"date": "2026-06-17", "value": 121.6},
+        {"date": "2026-06-18", "value": 121.4}, {"date": "2026-06-19", "value": 121.7},
+        {"date": "2026-06-20", "value": 122.3}
+      ]
+    },
+    "usdjpy": {
+      "key": "usdjpy", "source": "yfinance:JPY=X", "asof": "2026-06-23", "lag_desc": "EOD delayed", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 156.2}, {"date": "2026-06-18", "value": 156.5},
+        {"date": "2026-06-19", "value": 156.8}, {"date": "2026-06-20", "value": 157.1},
+        {"date": "2026-06-23", "value": 157.9}
+      ]
+    },
+    "brent": {
+      "key": "brent", "source": "yfinance:BZ=F", "asof": "2026-06-23", "lag_desc": "EOD delayed", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 78.5}, {"date": "2026-06-18", "value": 79.1},
+        {"date": "2026-06-19", "value": 79.4}, {"date": "2026-06-20", "value": 80.2},
+        {"date": "2026-06-23", "value": 82.6}
+      ]
+    },
+    "copper_gold": {
+      "key": "copper_gold", "source": "yfinance:HG=F,GC=F", "asof": "2026-06-23", "lag_desc": "EOD delayed", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 0.00185}, {"date": "2026-06-18", "value": 0.00184},
+        {"date": "2026-06-19", "value": 0.00184}, {"date": "2026-06-20", "value": 0.00182},
+        {"date": "2026-06-23", "value": 0.00179}
+      ]
+    },
+    "vix_term": {
+      "key": "vix_term", "source": "yfinance:^VIX,^VIX3M", "asof": "2026-06-23", "lag_desc": "EOD delayed", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 0.86}, {"date": "2026-06-18", "value": 0.85},
+        {"date": "2026-06-19", "value": 0.87}, {"date": "2026-06-20", "value": 0.90},
+        {"date": "2026-06-23", "value": 1.04}
+      ]
+    },
+    "move_proxy": {
+      "key": "move_proxy", "source": "derived:realized_vol_dgs10_20d", "asof": "2026-06-23", "lag_desc": "derived (DGS10 20d rv)", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 0.062}, {"date": "2026-06-18", "value": 0.063},
+        {"date": "2026-06-19", "value": 0.064}, {"date": "2026-06-20", "value": 0.066},
+        {"date": "2026-06-23", "value": 0.071}
+      ]
+    },
+    "breadth_200dma": {
+      "key": "breadth_200dma", "source": "vendor:SPXA200R", "asof": "2026-06-23", "lag_desc": "EOD", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 62.0}, {"date": "2026-06-18", "value": 61.5},
+        {"date": "2026-06-19", "value": 61.0}, {"date": "2026-06-20", "value": 60.2},
+        {"date": "2026-06-23", "value": 55.8}
+      ]
+    },
+    "rsp_spy": {
+      "key": "rsp_spy", "source": "yfinance:RSP,SPY", "asof": "2026-06-23", "lag_desc": "EOD delayed", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 0.345}, {"date": "2026-06-18", "value": 0.344},
+        {"date": "2026-06-19", "value": 0.344}, {"date": "2026-06-20", "value": 0.342},
+        {"date": "2026-06-23", "value": 0.338}
+      ]
+    },
+    "net_liquidity": {
+      "key": "net_liquidity", "source": "derived:fred_walcl_wtregen_rrpontsyd", "asof": "2026-06-18", "lag_desc": "derived (H.4.1 weekly Thu)", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-05-21", "value": 5920.0}, {"date": "2026-05-28", "value": 5905.0},
+        {"date": "2026-06-04", "value": 5890.0}, {"date": "2026-06-11", "value": 5870.0},
+        {"date": "2026-06-18", "value": 5840.0}
+      ]
+    },
+    "sofr_iorb": {
+      "key": "sofr_iorb", "source": "derived:fred_sofr_iorb", "asof": "2026-06-23", "lag_desc": "derived (FRED daily)", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 0.05}, {"date": "2026-06-18", "value": 0.06},
+        {"date": "2026-06-19", "value": 0.08}, {"date": "2026-06-20", "value": 0.14},
+        {"date": "2026-06-23", "value": 0.27}
+      ]
+    },
+    "srf_takeup": {
+      "key": "srf_takeup", "source": "nyfed:srf", "asof": "2026-06-23", "lag_desc": "NY Fed daily ops", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 0.0}, {"date": "2026-06-18", "value": 0.0},
+        {"date": "2026-06-19", "value": 0.0}, {"date": "2026-06-20", "value": 2.3},
+        {"date": "2026-06-23", "value": 6.1}
+      ]
+    },
+    "btc": {
+      "key": "btc", "source": "yfinance:BTC-USD", "asof": "2026-06-23", "lag_desc": "EOD delayed", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 104500.0}, {"date": "2026-06-18", "value": 105200.0},
+        {"date": "2026-06-19", "value": 104800.0}, {"date": "2026-06-20", "value": 103100.0},
+        {"date": "2026-06-23", "value": 99800.0}
+      ]
+    },
+    "stablecoin_cap": {
+      "key": "stablecoin_cap", "source": "defillama:stablecoins", "asof": "2026-06-23", "lag_desc": "DefiLlama daily", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-06-17", "value": 248.0e9}, {"date": "2026-06-18", "value": 248.4e9},
+        {"date": "2026-06-19", "value": 248.6e9}, {"date": "2026-06-20", "value": 248.9e9},
+        {"date": "2026-06-23", "value": 249.5e9}
+      ]
+    },
+    "anfci": {
+      "key": "anfci", "source": "fred:ANFCI", "asof": "2026-06-20", "lag_desc": "NFCI weekly", "ok": true, "error": null,
+      "history": [
+        {"date": "2026-05-23", "value": -0.30}, {"date": "2026-05-30", "value": -0.29},
+        {"date": "2026-06-06", "value": -0.28}, {"date": "2026-06-13", "value": -0.26},
+        {"date": "2026-06-20", "value": -0.18}
+      ]
+    },
+    "move_delayed_example_degraded": {
+      "key": "move_delayed_example_degraded", "source": "yfinance:^MOVE", "asof": null, "lag_desc": "paywalled/delayed", "ok": false, "error": "fetch failed: no data returned (graceful-degradation demo tile)",
+      "history": []
+    }
+  },
+  "calendar": [
+    {
+      "event": "US CPI (MoM)", "time": "2026-06-24T12:30:00Z", "consensus": 0.2,
+      "high_impact": true, "prior_citi_surprise": -0.35, "rank": 2
+    },
+    {
+      "event": "Fed H.4.1 Balance Sheet", "time": "2026-06-25T20:30:00Z", "consensus": null,
+      "high_impact": false, "prior_citi_surprise": null, "rank": 8
+    }
+  ]
+}

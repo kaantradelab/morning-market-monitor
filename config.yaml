@@ -1,0 +1,370 @@
+# Morning Market Monitor — SPEC-2 backend config
+# Source of truth for disputed knobs, data sources, tiles, axes, and thresholds.
+# Disputed knobs (reference SS6) are CONFIG here, NOT hard-coded, so we can A/B.
+# config_hash in each brief is computed from this resolved file.
+
+schema_version: "1.0.0"
+
+# --------------------------------------------------------------------------
+# DISPUTED KNOBS (reference section 6 — genuinely unsettled; switchable, not baked in)
+# --------------------------------------------------------------------------
+knobs:
+  vol_model: ewma            # ewma | garch   (ewma default, lambda=0.94)
+  percentile_window: 3y      # 1y | 3y | full (rarity window; default 3y)
+  fpr_control: fdr           # fdr | corroboration | composite_only (primary false-positive control)
+  net_liquidity: context_only   # context_only — never an oracle; flagged non-Fed construct
+  cot_positioning: modifier_only # modifier_only — delayed/category-ambiguous, contrarian-extreme modifier only
+
+# --------------------------------------------------------------------------
+# ANOMALY THRESHOLDS (reference section 2)
+# --------------------------------------------------------------------------
+anomaly:
+  ewma_lambda: 0.94          # RiskMetrics daily; half-life ~11d
+  fdr_q: 0.10                # Benjamini-Yekutieli q (BY, dependency-robust — tiles are cross-correlated)
+  fdr_method: by             # by (Benjamini-Yekutieli) | bh (Benjamini-Hochberg)
+  headline_sigma: 3.0        # simple Bonferroni-flavored fallback headline threshold
+  corroboration_min: 2       # >=2 orthogonal tiles in same narrative cluster before a Red
+  robust_z_threshold: 3.5    # |robust z| > 3.5 (Iglewicz-Hoaglin) for spiky series
+  corr_break_sigma: 2.5      # residual outlier threshold (EWMA-sigma multiples)
+  corr_break_persistence_days: 3   # consecutive days before a corr-regime flag
+  dog_didnt_bark_ratio: 0.5  # realized/expected < 0.5 => no-bark (priced-in / coiled spring)
+  level_pct_window_days: 756 # ~3y trading days for level percentile
+  history_depth_years: 3     # minimum history pulled per series for 1y+3y baselines
+  sparkline_points: 30       # history points carried into each tile for the inline SVG
+
+calibration:
+  calm_morning_max_reds: 1   # on a calm morning expect <=1 Red; more => thresholds too loose (rec-2)
+
+# --------------------------------------------------------------------------
+# OUTPUT / RENDER
+# --------------------------------------------------------------------------
+output:
+  max_cards: 3               # <=3 attention cards (crisis banner may add 1 more, flagged is_banner)
+  data_dir: data            # per-day JSON committed to repo: data/<YYYY-MM-DD>.json
+  site_dir: site            # rendered static site root (index.html + archive/)
+  archive_subdir: archive   # site/archive/<YYYY-MM-DD>.html
+  timezone: Europe/Istanbul # logical morning date; Turkey permanently UTC+3, no DST
+
+# --------------------------------------------------------------------------
+# DATA SOURCES
+# --------------------------------------------------------------------------
+sources:
+  fred:
+    base_url: https://api.stlouisfed.org/fred
+    api_key_env: FRED_API_KEY
+  finnhub:
+    base_url: https://finnhub.io/api/v1
+    api_key_env: FINNHUB_API_KEY
+  yfinance:
+    # no key; library handles delayed EOD/snapshot
+    enabled: true
+  defillama:
+    base_url: https://stablecoins.llama.fi
+    enabled: true
+
+# FRED series IDs (reference section 1 table). Grouped for readability.
+fred_series:
+  rates:    [DGS2, DGS10, DFII10, T10YIE, T10Y2Y, T10Y3M]
+  credit:   [BAMLH0A0HYM2, BAMLC0A0CM, BAMLC0A4CBBB]
+  dollar:   [DTWEXBGS]
+  plumbing: [WALCL, WTREGEN, RRPONTSYD, SOFR, IORB, EFFR, DFEDTARU, DFEDTARL]
+  composites: [NFCI, ANFCI, STLFSI4]
+
+# yfinance tickers (delayed EOD/snapshot)
+yfinance_tickers:
+  equities: ["^GSPC", "ES=F", "^NDX"]
+  vol:      ["^VIX", "^VIX3M", "^VVIX", "^MOVE"]
+  fx:       ["DX-Y.NYB", "EURUSD=X", "JPY=X", "CNH=X"]
+  commodity: ["CL=F", "BZ=F", "GC=F", "HG=F"]
+
+# --------------------------------------------------------------------------
+# AXES (reference section 1 — orthogonal factor coverage before ticker count)
+# --------------------------------------------------------------------------
+axes:
+  0:  Composite anchor
+  1:  Risk appetite
+  2:  Rates - front
+  3:  Rates - long (decomposed)
+  4:  Curve
+  5:  Credit
+  6:  Dollar / funding
+  7:  Commodities
+  8:  Equity vol (level + shape)
+  9:  Rates vol
+  10: Breadth / concentration
+  11: Funding plumbing
+  12: Crypto
+
+# --------------------------------------------------------------------------
+# CORE TILES (~15, one per orthogonal axis). transform decides whether a z is computed.
+# transform: log_return (prices) | first_diff (yields/spreads) | ratio | sign | level
+# front_screen: belongs to the 60-second orientation set (rows 0,1,2,3,4,5,6,8,10,11)
+# --------------------------------------------------------------------------
+tiles:
+  - key: ofr_fsi
+    axis: 0
+    label: OFR FSI
+    source: ofr:fsi
+    transform: first_diff
+    front_screen: true
+    note: "composite anchor; daily, 2-bd lag"
+  - key: nfci
+    axis: 0
+    label: Chicago Fed NFCI
+    source: fred:NFCI
+    transform: first_diff
+    front_screen: true
+    note: "weekly composite"
+  - key: anfci
+    axis: 0
+    label: Chicago Fed ANFCI
+    source: fred:ANFCI
+    transform: first_diff
+    note: "adjusted NFCI; weekly composite; detect-on-composites anchor"
+  - key: stlfsi4
+    axis: 0
+    label: St. Louis Fed FSI (STLFSI4)
+    source: fred:STLFSI4
+    transform: first_diff
+    note: "weekly composite; reserved freshness window, optional anchor"
+
+  - key: spx
+    axis: 1
+    label: S&P 500 / ES
+    source: yfinance:ES=F
+    transform: log_return
+    front_screen: true
+  - key: vix
+    axis: 1
+    label: VIX
+    source: yfinance:^VIX
+    transform: first_diff
+    front_screen: true
+    note: "prices insurance, orthogonal to SPX level"
+
+  - key: ust_2y
+    axis: 2
+    label: UST 2Y
+    source: fred:DGS2
+    transform: first_diff
+    front_screen: true
+
+  - key: real_10y
+    axis: 3
+    label: 10Y Real (DFII10)
+    source: fred:DFII10
+    transform: first_diff
+    front_screen: true
+  - key: breakeven_10y
+    axis: 3
+    label: 10Y Breakeven (T10YIE)
+    source: fred:T10YIE
+    transform: first_diff
+    front_screen: true
+
+  - key: curve_2s10s
+    axis: 4
+    label: 2s10s (T10Y2Y)
+    source: fred:T10Y2Y
+    transform: sign        # sign-change IS the signal; no z-score
+    front_screen: true
+    note: "sign-change is the signal"
+
+  - key: hy_oas
+    axis: 5
+    label: HY OAS (BAMLH0A0HYM2)
+    source: fred:BAMLH0A0HYM2
+    transform: first_diff
+    front_screen: true
+    note: "OAS not HYG/LQD ETF"
+  - key: ig_oas
+    axis: 5
+    label: IG OAS (BAMLC0A0CM)
+    source: fred:BAMLC0A0CM
+    transform: first_diff
+
+  - key: usd_broad
+    axis: 6
+    label: Fed Broad USD (DTWEXBGS)
+    source: fred:DTWEXBGS
+    transform: log_return
+    front_screen: true
+    note: "Broad = economic gauge; DXY is EUR-story proxy"
+  - key: usdjpy
+    axis: 6
+    label: USDJPY
+    source: yfinance:JPY=X
+    transform: log_return
+    front_screen: true
+
+  - key: brent
+    axis: 7
+    label: Brent
+    source: yfinance:BZ=F
+    transform: log_return
+  - key: copper_gold
+    axis: 7
+    label: Copper / Gold ratio
+    source: yfinance:HG=F,GC=F
+    transform: ratio
+    # SPEC-2 line 31 lists a "copper monthly" staleness label; this build
+    # INTENTIONALLY supersedes it with the DAILY HG=F/GC=F futures ratio — the
+    # clean growth read per reference SS1 axis 7 (5-day freshness window is correct
+    # for the daily source). The monthly-copper badge is deliberately not produced.
+    note: "clean growth read (daily copper/gold ratio supersedes monthly-copper); oil is geopolitics-contaminated"
+
+  - key: vix_term
+    axis: 8
+    label: VIX / VIX3M
+    source: yfinance:^VIX,^VIX3M
+    transform: ratio
+    front_screen: true
+    note: "ratio>1.0 = backwardation = acute stress"
+
+  - key: move_proxy
+    axis: 9
+    label: Rates vol (MOVE proxy)
+    source: derived:realized_vol_dgs10_20d
+    transform: level
+    note: "free proxy = 20d realized vol of DGS10 changes; ^MOVE delayed if licensed"
+
+  - key: breadth_200dma
+    axis: 10
+    label: "% S&P >200DMA"
+    source: vendor:SPXA200R
+    transform: first_diff
+    front_screen: true
+  - key: rsp_spy
+    axis: 10
+    label: RSP/SPY (equal vs cap weight)
+    source: yfinance:RSP,SPY
+    transform: ratio
+    front_screen: true
+
+  - key: net_liquidity
+    axis: 11
+    label: Net Liquidity (WALCL-TGA-RRP)
+    source: derived:fred_walcl_wtregen_rrpontsyd
+    transform: first_diff
+    front_screen: true
+    note: "CONSTRUCT, not a Fed metric — context_only (see knobs.net_liquidity)"
+  - key: sofr_iorb
+    axis: 11
+    label: SOFR - IORB
+    source: derived:fred_sofr_iorb
+    transform: level
+    front_screen: true
+    note: "plumbing flag driver; >25bp = stress"
+  - key: srf_takeup
+    axis: 11
+    label: SRF take-up
+    source: nyfed:srf
+    transform: level
+    front_screen: true
+    note: "rising off ~0 = stress"
+
+  - key: btc
+    axis: 12
+    label: BTC
+    source: yfinance:BTC-USD
+    transform: log_return
+  - key: stablecoin_cap
+    axis: 12
+    label: Stablecoin aggregate cap
+    source: defillama:stablecoins
+    transform: log_return
+    note: "crypto dry powder; keep small"
+
+# --------------------------------------------------------------------------
+# DETECT-ON-COMPOSITES (reference section 2.2 point 5)
+# The deviation/FDR test runs on these composites + axis-aggregates FIRST,
+# NOT on the 30 raw tiles. Shrinks the family 30->~6, builds corroboration in,
+# kills the fake-corroboration trap. Raw tiles are drill-down only.
+# --------------------------------------------------------------------------
+detect_on:
+  composites: [ofr_fsi, nfci, anfci]
+  # axis-aggregates: standardized aggregate per axis (computed by anomaly engine
+  # from member tiles). 5-8 of these complete the ~6-member test family.
+  axis_factors:
+    - axis: 1  # risk appetite
+      members: [spx, vix]
+    - axis: 3  # long rates (real+breakeven)
+      members: [real_10y, breakeven_10y]
+    - axis: 5  # credit
+      members: [hy_oas, ig_oas]
+    - axis: 6  # dollar/funding
+      members: [usd_broad, usdjpy]
+    - axis: 8  # equity vol
+      members: [vix, vix_term]
+    - axis: 11 # funding plumbing
+      members: [net_liquidity, sofr_iorb, srf_takeup]
+
+# --------------------------------------------------------------------------
+# PLUMBING FLAGS (reference section 1 axis 11, section 3)
+# --------------------------------------------------------------------------
+plumbing_flags:
+  - name: srf_takeup
+    rule: "value > 0"          # SRF rising off ~0
+    note: "SRF take-up rising off zero = funding stress"
+  - name: sofr_minus_iorb
+    rule: "value > 0.25"       # >25bp (in percentage points)
+    note: "SOFR-IORB > 25bp = repo stress"
+  - name: effr_top_of_range
+    rule: "effr >= dfedtaru - 0.01"  # within 1bp of top of target range
+    note: "EFFR at top of range = reserves tightening"
+  - name: net_liq_5d_drop
+    rule: "5d_change < 0"      # net-liq 5-day drop (context_only)
+    note: "Net liquidity 5d drop — CONTEXT only, not an oracle"
+
+# --------------------------------------------------------------------------
+# CORRELATION-BREAK structural relationships (reference section 2.3)
+# Residual of A ~ f(B) over fit_window_days; flag when today's residual is an outlier.
+# --------------------------------------------------------------------------
+corr_breaks:
+  # fit_window_days: structural OLS fit uses a LONG (~3y) baseline (reference SS2.3 —
+  # 1y beta is noisier/regime-contaminated). Sign-flip detection internally uses a
+  # short trailing slope vs this long window, so the short read is preserved.
+  - name: gold_vs_realyield_usd
+    target: copper_gold
+    factors: [real_10y, usd_broad]
+    fit_window_days: 756       # ~3y structural baseline
+  - name: hy_oas_vs_acwi_vix
+    target: hy_oas
+    factors: [spx, vix]
+    fit_window_days: 756       # ~3y structural baseline
+  - name: stock_bond_corr
+    target: spx
+    factors: [ust_2y]
+    fit_window_days: 756       # ~3y structural baseline
+    weight_sign_flip: true     # sign-flip amplified within a persisted break (2022 regime)
+
+# --------------------------------------------------------------------------
+# CALENDAR ranking (reference section 3 — cross-asset transmission power, not media)
+# high_impact tiles get high_impact=true in the brief.
+# --------------------------------------------------------------------------
+calendar:
+  provider: finnhub          # finnhub | fmp
+  high_impact_events:
+    - FOMC
+    - CPI
+    - NFP
+    - Nonfarm Payrolls
+    - ECB
+    - BoJ
+    - BoE
+    - Core PCE
+    - GDP
+    - Treasury Refunding
+    - 10Y Auction
+    - 30Y Auction
+  citi_surprise:
+    enabled: false           # MacroMicro scrape — confirm free availability with Kaan
+    note: "normalize surprise via Citi Economic Surprise Index if scrapable"
+
+# --------------------------------------------------------------------------
+# QUARANTINE — intraday gauges: regime-label only, NEVER a same-morning trigger
+# --------------------------------------------------------------------------
+quarantine_intraday:
+  - dealer_gamma
+  - zero_dte_flow
+  - intraday_repo

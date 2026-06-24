@@ -1,0 +1,27 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local data / caches (per-day JSON IS committed; transient pulls are not)
+data/_cache/
+*.local.json
+.DS_Store
+
+# Rendered site is built by CI for Pages; keep ALL local builds out of git.
+# Invariant: site/ is never committed (incl. site/.nojekyll, which render.py
+# recreates each run and is shipped only inside the upload-pages-artifact tree).
+/site/

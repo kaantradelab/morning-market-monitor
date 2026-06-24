@@ -1,0 +1,12 @@
+# Morning Market Monitor — SPEC-2 backend. Python 3.13.
+# LOCKED stack: no web framework, no JS framework.
+numpy>=2.0
+pandas>=2.2
+scipy>=1.13
+httpx>=0.27
+yfinance>=0.2.40
+jinja2>=3.1
+PyYAML>=6.0
+# test-only (kept here for the single-file CI install; harmless at runtime)
+pytest>=8.0
+jsonschema>=4.21

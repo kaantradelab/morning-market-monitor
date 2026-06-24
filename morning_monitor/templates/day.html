@@ -1,0 +1,201 @@
+{# Per-day page (index.html = latest; archive/<date>.html = past). BUILD TARGET 4.
+   Brief fields available are documented inline. Sparklines: {{ tile.history | sparkline }}.
+   Relative-link vars (so the same template works at site root AND inside archive/):
+     day_href_prefix     -> prefix to reach a day page  ("archive/" from root, "" from archive/)
+     archive_index_href  -> href of the archive list     ("archive/index.html" / "index.html")
+   `archive_dates` = full list of dates (newest first) for the date dropdown. #}
+{% extends "base.html" %}
+{% block title %}Morning Monitor — {{ brief.meta.date }}{% endblock %}
+
+{% block meta %}
+  <div class="metabar">
+    <span class="temp">
+      <span class="dot dot-{{ temperature.color }}"></span>{{ temperature.label }}
+    </span>
+    <span class="sep">·</span>
+    <span><b>{{ brief.meta.date }}</b></span>
+    <span class="sep">·</span>
+    <span>run {{ brief.meta.run_ts_utc }}</span>
+    <span class="sep">·</span>
+    <span>cfg {{ brief.meta.config_hash }}</span>
+    {% if brief.meta.calm_morning %}<span class="sep">·</span><span class="badge bg-green color-green">calm morning</span>{% endif %}
+    {% if brief.meta.degraded_sources %}<span class="sep">·</span><span class="badge bg-amber color-amber">degraded: {{ brief.meta.degraded_sources | join(", ") }}</span>{% endif %}
+    <span class="nav">
+      {% if archive_dates %}
+      <label>day
+        <select class="datejump" onchange="if(this.value)window.location.href=this.value;">
+          {% for d in archive_dates %}
+            <option value="{{ day_href_prefix }}{{ d }}.html"{% if d == brief.meta.date %} selected{% endif %}>{{ d }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+      <a href="{{ archive_index_href }}">archive</a>
+    </span>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {# ---- 1. Attention cards (<=3 + optional banner) ---- #}
+  <section id="cards">
+    <h2 class="section">Why now</h2>
+    <div class="cards">
+      {% for card in brief.cards %}
+        <article class="card b-{{ card.color or 'gray' }}{% if card.is_banner %} is-banner bg-{{ card.color or 'gray' }}{% endif %}">
+          <h3 class="color-{{ card.color or 'gray' }}">{{ card.title }}{% if card.is_banner %} <span class="badge bg-red color-red">BANNER</span>{% endif %}</h3>
+          <div class="metric">{{ card.metric }}</div>
+          <div class="score">{{ card.score_desc }}</div>
+          <dl class="why">
+            <dt>percentile / z</dt><dd>{{ card.why_now.percentile_or_z }}</dd>
+            {% if card.why_now.calendar_event %}<dt>calendar</dt><dd>{{ card.why_now.calendar_event }}</dd>{% endif %}
+            <dt>cross-asset</dt><dd>{{ card.why_now.cross_asset_confirm_or_contradict }}</dd>
+          </dl>
+        </article>
+      {% else %}
+        <p class="empty">No attention cards — nothing crossed the why-now bar this morning.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ---- 2. Composite anchors ---- #}
+  <section id="composites">
+    <h2 class="section">Composite anchors</h2>
+    <div class="composites">
+      {% for comp in composites_list %}
+        <div class="comp b-{{ comp.color or 'gray' }}{% if comp.staleness and comp.staleness.is_stale %} stale{% endif %}">
+          <div class="name">{{ comp.name }}</div>
+          <div class="val color-{{ comp.color or 'gray' }}">{{ comp.value | num }}</div>
+          <div class="pct">
+            {% if comp.level_pct is not none %}lvl {{ comp.level_pct | num(0) }}%{% endif %}
+            {% if comp.change_score is not none %}· Δz {{ comp.change_score | num }}{% endif %}
+          </div>
+          {% if comp.staleness %}<span class="stale-badge{% if comp.staleness.is_stale %} is-stale{% endif %}">{{ comp.staleness.lag_desc }}</span>{% endif %}
+        </div>
+      {% else %}
+        <p class="empty">No composites available.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ---- 3. Orientation tile grid, grouped by axis ---- #}
+  <section id="tiles">
+    <h2 class="section">Orientation grid</h2>
+    {% for group in axis_groups %}
+      <div class="axis-group">
+        <h3>{{ group.axis }} · {{ group.label }}</h3>
+        <div class="tiles">
+          {% for tile in group.tiles %}
+            <div class="tile b-{{ tile.color }}{% if tile.is_front_screen %} front{% endif %}{% if tile.staleness.is_stale %} stale{% endif %}">
+              <div class="thead">
+                <span class="label">{{ tile.label }}</span>
+                <span class="val color-{{ tile.color }}">{{ tile.value | num }}</span>
+              </div>
+              <div class="row">
+                <span>Δ <b>{{ tile.change | signed }}</b></span>
+                {% if tile.ewma_z is not none %}<span>z <b>{{ tile.ewma_z | num }}</b></span>{% endif %}
+                {% if tile.pct_1y is not none %}<span>1y <b>{{ tile.pct_1y | num(0) }}%</b></span>{% endif %}
+                {% if tile.pct_3y is not none %}<span>3y <b>{{ tile.pct_3y | num(0) }}%</b></span>{% endif %}
+              </div>
+              <div class="spark">{{ tile.history | sparkline }}</div>
+              <span class="stale-badge{% if tile.staleness.is_stale %} is-stale{% endif %}">{{ tile.staleness.lag_desc or 'fresh' }}{% if tile.staleness.asof %} · {{ tile.staleness.asof }}{% endif %}</span>
+              {% if tile.note %}<span class="note">{{ tile.note }}</span>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <p class="empty">No tiles.</p>
+    {% endfor %}
+  </section>
+
+  {# ---- 4. Calendar strip ---- #}
+  <section id="calendar">
+    <h2 class="section">Calendar</h2>
+    {% if brief.calendar %}
+      <table class="t">
+        <thead><tr><th>Event</th><th>Time (UTC)</th><th>Consensus</th><th>Prior surprise</th><th></th></tr></thead>
+        <tbody>
+          {% for ev in brief.calendar %}
+            <tr>
+              <td>{{ ev.event }}{% if ev.high_impact %} <span class="tag-hi">high-impact</span>{% endif %}</td>
+              <td>{{ ev.time or '—' }}</td>
+              <td>{% if ev.consensus is not none %}{{ ev.consensus }}{% else %}—{% endif %}</td>
+              <td>{% if ev.prior_citi_surprise is not none %}{{ ev.prior_citi_surprise | signed }}{% else %}—{% endif %}</td>
+              <td>{% if ev.rank is not none %}#{{ ev.rank }}{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty">No scheduled events.</p>
+    {% endif %}
+  </section>
+
+  {# ---- 5. Plumbing flags ---- #}
+  <section id="plumbing">
+    <h2 class="section">Plumbing flags</h2>
+    {% if brief.plumbing_flags %}
+      <table class="t">
+        <thead><tr><th>Flag</th><th>Value</th><th>State</th><th>Note</th></tr></thead>
+        <tbody>
+          {% for f in brief.plumbing_flags %}
+            <tr class="{% if f.triggered %}triggered{% endif %}">
+              <td>{{ f.name }}</td>
+              <td>{{ f.value | num }}{% if f.staleness and f.staleness.is_stale %} <span class="stale-badge is-stale">stale</span>{% endif %}</td>
+              <td><span class="pill {% if f.triggered %}on{% else %}off{% endif %}">{{ 'TRIGGERED' if f.triggered else 'clear' }}</span></td>
+              <td>{{ f.note }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty">No plumbing flags.</p>
+    {% endif %}
+  </section>
+
+  {# ---- 6. Correlation breaks + dog-didn't-bark ---- #}
+  <section id="dislocations">
+    <h2 class="section">Dislocations</h2>
+    {% if brief.corr_breaks %}
+      <table class="t">
+        <thead><tr><th>Correlation break</th><th>Residual z</th><th>Persistence</th><th>State</th><th>Note</th></tr></thead>
+        <tbody>
+          {% for cb in brief.corr_breaks %}
+            <tr class="{% if cb.triggered %}triggered{% endif %}">
+              <td>{{ cb.name }}{% if cb.sign_flip %} <span class="tag-hi">sign-flip</span>{% endif %}</td>
+              <td>{{ cb.residual_z | num }}</td>
+              <td>{{ cb.persistence_days }}d</td>
+              <td><span class="pill {% if cb.triggered %}on{% else %}off{% endif %}">{{ 'BREAK' if cb.triggered else 'normal' }}</span></td>
+              <td>{{ cb.note }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+    {% if brief.dog_didnt_bark %}
+      <table class="t" style="margin-top:.6rem;">
+        <thead><tr><th>Dog didn't bark</th><th>Event</th><th>Expected</th><th>Realized</th><th>Ratio</th><th>State</th></tr></thead>
+        <tbody>
+          {% for d in brief.dog_didnt_bark %}
+            <tr class="{% if d.triggered %}triggered{% endif %}">
+              <td>{{ d.tile_key }}</td>
+              <td>{{ d.event }}</td>
+              <td>{{ d.expected_move | num }}</td>
+              <td>{{ d.realized_move | num }}</td>
+              <td>{{ d.ratio | num }}</td>
+              <td><span class="pill {% if d.triggered %}on{% else %}off{% endif %}">{{ 'QUIET' if d.triggered else 'normal' }}</span></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+    {% if not brief.corr_breaks and not brief.dog_didnt_bark %}
+      <p class="empty">No structural dislocations detected.</p>
+    {% endif %}
+  </section>
+{% endblock %}
+
+{% block footer %}
+  <span>Morning Market Monitor · snapshot, free-data, runs once a morning</span>
+  <span><a href="{{ archive_index_href }}">Archive</a></span>
+{% endblock %}

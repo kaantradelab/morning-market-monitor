@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kaantradelab.github.io/morning-market-monitor/schema/brief.schema.json",
+  "title": "MorningBrief",
+  "description": "Per-day morning-market-monitor brief. The durable record emitted once per morning (cron 09:00 Istanbul / 06:00 UTC). This JSON is the SPINE: ingestion->anomaly->brief all write into it; render reads it. Versioned by schema_version so historical archive entries stay parseable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "meta", "composites", "tiles", "cards", "calendar", "plumbing_flags", "corr_breaks", "dog_didnt_bark"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Semantic version of THIS schema. Bump on any breaking field change so archived briefs remain readable.",
+      "const": "1.0.0"
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["date", "run_ts_utc", "config_hash"],
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "Logical morning date in Istanbul, YYYY-MM-DD. Filename key for archive/<date>.html and data/<date>.json."
+        },
+        "run_ts_utc": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Actual UTC timestamp the run executed (ISO 8601)."
+        },
+        "config_hash": {
+          "type": "string",
+          "description": "Short hash (e.g. sha256[:12]) of the resolved config.yaml used for this run. Lets a reader know which disputed-knob settings produced this brief."
+        },
+        "vol_model": {
+          "type": "string",
+          "enum": ["ewma", "garch"],
+          "description": "Resolved vol_model knob for this run (echoed from config for provenance)."
+        },
+        "percentile_window": {
+          "type": "string",
+          "enum": ["1y", "3y", "full"],
+          "description": "Resolved percentile_window knob."
+        },
+        "fpr_control": {
+          "type": "string",
+          "enum": ["fdr", "corroboration", "composite_only"],
+          "description": "Resolved false-positive-control knob."
+        },
+        "calm_morning": {
+          "type": "boolean",
+          "description": "Calibration self-check: true if the run surfaced <=1 Red. If false on a known-calm day, thresholds are too loose (reference rec-2)."
+        },
+        "degraded_sources": {
+          "type": "array",
+          "description": "Source keys that failed/were stale this run (graceful degradation log). Empty = clean run.",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "composites": {
+      "type": "object",
+      "description": "The 'one-number' system-temperature anchors. The anomaly test runs FIRST on these (detect-on-composites). Any composite may be null if its source was unavailable.",
+      "additionalProperties": false,
+      "required": ["ofr_fsi", "nfci", "anfci"],
+      "properties": {
+        "ofr_fsi": {"$ref": "#/$defs/composite"},
+        "nfci": {"$ref": "#/$defs/composite"},
+        "anfci": {"$ref": "#/$defs/composite"},
+        "stlfsi4": {"$ref": "#/$defs/composite"}
+      }
+    },
+    "tiles": {
+      "type": "array",
+      "description": "One entry per CORE tile (~15, spanning axes 0-12). The orientation layer. Each tile is enriched by the anomaly engine with z/percentile/color/staleness.",
+      "items": {"$ref": "#/$defs/tile"}
+    },
+    "cards": {
+      "type": "array",
+      "description": "<=3 attention cards (a crisis banner may add a 4th flagged is_banner). Every card MUST carry a populated why_now, else it is suppressed upstream (decorative-noise rule).",
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/card"}
+    },
+    "calendar": {
+      "type": "array",
+      "description": "Today's scheduled releases, ranked by cross-asset transmission power.",
+      "items": {"$ref": "#/$defs/calendar_event"}
+    },
+    "plumbing_flags": {
+      "type": "array",
+      "description": "Funding-plumbing axis flags (SRF rising off 0, SOFR-IORB>25bp, EFFR top-of-range, net-liq 5d drop). The most-omitted axis; front-screened.",
+      "items": {"$ref": "#/$defs/plumbing_flag"}
+    },
+    "corr_breaks": {
+      "type": "array",
+      "description": "Correlation-break dislocations expressed as structural-relationship residual outliers (NOT rolling-corr). Require 3-day persistence.",
+      "items": {"$ref": "#/$defs/corr_break"}
+    },
+    "dog_didnt_bark": {
+      "type": "array",
+      "description": "'The dog that didn't bark' — on scheduled-event days, realized move < ~0.5x expected (priced-in / coiled spring). The low tail of the conditional residual.",
+      "items": {"$ref": "#/$defs/dog_didnt_bark"}
+    }
+  },
+  "$defs": {
+    "composite": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["value", "level_pct", "change_score"],
+      "properties": {
+        "value": {"type": ["number", "null"], "description": "Latest composite reading."},
+        "level_pct": {"type": ["number", "null"], "minimum": 0, "maximum": 100, "description": "Level percentile of value over the configured window (state vs shock)."},
+        "change_score": {"type": ["number", "null"], "description": "EWMA-standardized change-score of the composite (z of its first-difference). The detect-on-composites test statistic."},
+        "color": {"$ref": "#/$defs/color"},
+        "staleness": {"$ref": "#/$defs/staleness"},
+        "history": {"$ref": "#/$defs/history"}
+      }
+    },
+    "tile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "axis", "label", "source", "value", "change", "transform", "ewma_z", "pct_1y", "pct_3y", "level_pct_756", "robust_z", "color", "staleness", "history"],
+      "properties": {
+        "key": {"type": "string", "description": "Stable tile identifier, e.g. 'ust_2y', 'hy_oas', 'vix'. Matches config tile key and the RawSeries key from ingestion."},
+        "axis": {"type": "integer", "minimum": 0, "maximum": 12, "description": "Orthogonal axis index 0-12 (0 composite anchor .. 12 crypto)."},
+        "label": {"type": "string", "description": "Human display label, e.g. 'UST 2Y', 'HY OAS'."},
+        "source": {"type": "string", "description": "Data source identifier, e.g. 'fred:DGS2', 'yfinance:^VIX', 'defillama:stablecoins'."},
+        "value": {"type": ["number", "null"], "description": "Latest level/price. null if source failed (tile then flagged stale/missing)."},
+        "change": {"type": ["number", "null"], "description": "Today's transformed change (log-return for prices, first-difference for yields/spreads)."},
+        "transform": {"type": "string", "enum": ["log_return", "first_diff", "level", "ratio", "sign"], "description": "Which transform produced 'change'. 'level'/'sign' = no z computed (e.g. curve sign-change is the signal)."},
+        "ewma_z": {"type": ["number", "null"], "description": "Magnitude: change / EWMA-sigma (lambda=0.94). null when transform in {level,sign} or source missing."},
+        "pct_1y": {"type": ["number", "null"], "minimum": 0, "maximum": 100, "description": "Empirical percentile of the standardized move over the 1y window."},
+        "pct_3y": {"type": ["number", "null"], "minimum": 0, "maximum": 100, "description": "Empirical percentile of the standardized move over the 3y window."},
+        "level_pct_756": {"type": ["number", "null"], "minimum": 0, "maximum": 100, "description": "Level percentile over 756 trading days (~3y) — state context, e.g. 'HY OAS at 95th pct'."},
+        "robust_z": {"type": ["number", "null"], "description": "Robust z = 0.6745*(x-median)/MAD (Iglewicz-Hoaglin) for spiky series; flag |z|>3.5."},
+        "color": {"$ref": "#/$defs/color"},
+        "staleness": {"$ref": "#/$defs/staleness"},
+        "history": {"$ref": "#/$defs/history"},
+        "is_front_screen": {"type": "boolean", "description": "True if tile belongs to the 60-second front-screen set (config-driven)."},
+        "note": {"type": ["string", "null"], "description": "Optional construct/label note, e.g. 'net-liq is a construct, not a Fed metric'."}
+      }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "metric", "score_desc", "why_now"],
+      "properties": {
+        "title": {"type": "string", "description": "Short headline, e.g. 'HY credit gapping wider'."},
+        "metric": {"type": "string", "description": "The abnormal metric and its tile, e.g. 'HY OAS +18bp (BAMLH0A0HYM2)'."},
+        "score_desc": {"type": "string", "description": "Plain-language score, e.g. '3.2-sigma move, 98th pct of 3y'."},
+        "color": {"$ref": "#/$defs/color"},
+        "is_banner": {"type": "boolean", "description": "True if this is a crisis banner (allowed to exceed the 3-card cap)."},
+        "tile_keys": {"type": "array", "items": {"type": "string"}, "description": "Tile keys backing this card (>=2 orthogonal for corroboration)."},
+        "why_now": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["percentile_or_z", "calendar_event", "cross_asset_confirm_or_contradict"],
+          "description": "MANDATORY. A card without a populated why_now is suppressed upstream.",
+          "properties": {
+            "percentile_or_z": {"type": "string", "description": "The rarity statement, e.g. '98th pct / 3.2-sigma'."},
+            "calendar_event": {"type": ["string", "null"], "description": "Related scheduled event today, or null if none (unscheduled shock)."},
+            "cross_asset_confirm_or_contradict": {"type": "string", "description": "Cross-asset corroboration or contradiction, e.g. 'confirmed by VIX backwardation + USD bid' or 'contradicted by calm equities'."}
+          }
+        }
+      }
+    },
+    "calendar_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "time", "consensus", "high_impact", "prior_citi_surprise"],
+      "properties": {
+        "event": {"type": "string", "description": "Release name, e.g. 'US CPI (MoM)'."},
+        "time": {"type": ["string", "null"], "description": "Release time, ISO 8601 or 'HH:MM TZ'. null if all-day/unknown."},
+        "consensus": {"type": ["number", "string", "null"], "description": "Consensus estimate (number or formatted string). null if no consensus."},
+        "high_impact": {"type": "boolean", "description": "High cross-asset-transmission flag (FOMC/CPI/NFP/central-bank/auctions)."},
+        "prior_citi_surprise": {"type": ["number", "null"], "description": "Prior Citi Economic Surprise Index reading (normalized surprise), or null if unavailable."},
+        "rank": {"type": ["integer", "null"], "description": "Transmission-power rank (1=FOMC .. higher=lower), reference section 3."}
+      }
+    },
+    "plumbing_flag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value", "triggered", "note"],
+      "properties": {
+        "name": {"type": "string", "description": "Flag name, e.g. 'sofr_minus_iorb', 'srf_takeup', 'net_liq_5d_drop', 'effr_top_of_range'."},
+        "value": {"type": ["number", "null"], "description": "Current numeric reading driving the flag."},
+        "triggered": {"type": "boolean", "description": "Whether the flag's threshold is breached this morning."},
+        "note": {"type": "string", "description": "Threshold/context note, e.g. 'SOFR-IORB 27bp > 25bp threshold'."},
+        "staleness": {"$ref": "#/$defs/staleness"}
+      }
+    },
+    "corr_break": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "residual_z", "persistence_days", "triggered", "note"],
+      "properties": {
+        "name": {"type": "string", "description": "Structural relationship, e.g. 'gold~real_yield+usd', 'hy_oas~acwi+vix', 'stock_bond_corr'."},
+        "residual_z": {"type": ["number", "null"], "description": "Today's residual as a vol-adjusted z / EWMA-sigma multiple."},
+        "persistence_days": {"type": "integer", "description": "Consecutive days the residual has been an outlier (need >=3 to flag a regime break)."},
+        "triggered": {"type": "boolean", "description": "True if residual_z outlier AND persistence>=3 (or a weighted sign-flip)."},
+        "sign_flip": {"type": "boolean", "description": "True if this is a correlation sign-flip (weighted heavily, e.g. stock-bond corr turning positive)."},
+        "note": {"type": "string", "description": "Plain description of the dislocation."}
+      }
+    },
+    "dog_didnt_bark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tile_key", "event", "expected_move", "realized_move", "ratio", "triggered"],
+      "properties": {
+        "tile_key": {"type": "string", "description": "Tile whose move was suppressed, e.g. 'spx'."},
+        "event": {"type": "string", "description": "The scheduled event a move was expected around, e.g. 'US CPI'."},
+        "expected_move": {"type": ["number", "null"], "description": "Straddle-implied or 3y event-day historical expected standardized move."},
+        "realized_move": {"type": ["number", "null"], "description": "Realized standardized move."},
+        "ratio": {"type": ["number", "null"], "description": "realized/expected. < ~0.5 = no-bark."},
+        "triggered": {"type": "boolean", "description": "True if ratio < threshold (priced-in / coiled spring)."},
+        "note": {"type": ["string", "null"], "description": "Optional context."}
+      }
+    },
+    "color": {
+      "type": "string",
+      "enum": ["green", "amber", "red", "gray"],
+      "description": "Tile/card status color. gray = stale/missing (graceful degradation). red = flagged anomaly that passed FDR + corroboration."
+    },
+    "staleness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asof", "lag_desc", "is_stale"],
+      "description": "Mandatory freshness badge on every tile/composite/flag.",
+      "properties": {
+        "asof": {"type": ["string", "null"], "format": "date", "description": "Date the underlying datapoint is as-of (YYYY-MM-DD). null if missing."},
+        "lag_desc": {"type": "string", "description": "Human lag descriptor, e.g. 'OFR 2-bd lag', 'NFCI weekly', 'copper monthly', 'EOD delayed'."},
+        "is_stale": {"type": "boolean", "description": "True if asof is older than the tile's expected freshness window (data did not refresh as expected)."}
+      }
+    },
+    "history": {
+      "type": "array",
+      "description": "Recent datapoints for the inline-SVG sparkline, oldest->newest. Render computes the SVG from these at render time.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date", "value"],
+        "properties": {
+          "date": {"type": "string", "format": "date"},
+          "value": {"type": ["number", "null"]}
+        }
+      }
+    }
+  }
+}
