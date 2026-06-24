@@ -85,6 +85,13 @@ def fetch_calendar_with_status(
         raw = getattr(config, "raw", {}) or {}
         cal_cfg = raw.get("calendar", {}) or {}
         provider = str(cal_cfg.get("provider", "fmp")).strip().lower()
+
+        # Calendar OFF: TradingView / SPEC-1 (Pine) owns the economic calendar (TV
+        # has a native one). Return immediately — no HTTP call, no degraded reason.
+        # The FMP/Finnhub fetchers below stay as dormant, selectable code-paths.
+        if provider in {"off", "none", "disabled", ""}:
+            return [], None
+
         high_impact_events = [str(e).lower() for e in cal_cfg.get("high_impact_events", [])]
 
         primary_reason: Optional[str] = None

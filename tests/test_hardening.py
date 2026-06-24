@@ -121,6 +121,52 @@ def _cfg_with_fmp_key(key: str | None) -> Config:
     return cfg2
 
 
+def _cfg_with_provider(provider: str) -> Config:
+    cfg = load_config(CONFIG_PATH)
+    raw = copy.deepcopy(cfg.raw)
+    raw.setdefault("calendar", {})["provider"] = provider
+    return Config(raw=raw, config_hash=cfg.config_hash, tiles=cfg.tiles)
+
+
+@pytest.mark.parametrize("provider", ["off", "none", "disabled", ""])
+def test_calendar_off_yields_empty_and_no_degraded(provider):
+    """Calendar OFF (TradingView/SPEC-1 owns it): immediate ([], None) — no HTTP,
+    no degraded entry. The daily 'calendar:FMP 403' degrade must not appear."""
+    from morning_monitor.sources.calendar import fetch_calendar_with_status
+
+    cfg = _cfg_with_provider(provider)
+
+    class _BoomClient:
+        def get(self, *a, **k):
+            raise AssertionError("calendar OFF must make NO HTTP call")
+
+        def close(self):
+            pass
+
+    events, reason = fetch_calendar_with_status(cfg, "2026-06-24", http=_BoomClient())
+    assert events == []
+    assert reason is None
+
+
+def test_calendar_default_config_is_off():
+    """The shipped config.yaml turns the backend calendar OFF -> no degraded entry."""
+    from morning_monitor.sources.calendar import fetch_calendar_with_status
+
+    cfg = load_config(CONFIG_PATH)
+    assert str(cfg.raw.get("calendar", {}).get("provider", "")).strip().lower() == "off"
+
+    class _BoomClient:
+        def get(self, *a, **k):
+            raise AssertionError("calendar OFF must make NO HTTP call")
+
+        def close(self):
+            pass
+
+    events, reason = fetch_calendar_with_status(cfg, "2026-06-24", http=_BoomClient())
+    assert events == []
+    assert reason is None
+
+
 def test_calendar_no_key_is_degraded_not_silent_empty():
     from morning_monitor.sources.calendar import fetch_calendar_with_status
 

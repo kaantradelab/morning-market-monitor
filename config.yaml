@@ -347,7 +347,9 @@ corr_breaks:
 # high_impact tiles get high_impact=true in the brief.
 # --------------------------------------------------------------------------
 calendar:
-  provider: fmp              # fmp (PRIMARY, Kaan's choice) | finnhub (secondary fallback)
+  # Economic calendar is owned by TradingView / SPEC-1 (Pine) — TV has a native
+  # calendar. The backend no longer sources it.
+  provider: "off"            # off (calendar owned by TradingView/SPEC-1) | fmp | finnhub — fmp/finnhub fetchers kept dormant
   high_impact_events:
     - FOMC
     - CPI
