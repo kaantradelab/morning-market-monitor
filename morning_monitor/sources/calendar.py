@@ -1,12 +1,21 @@
 """Economic-calendar fetcher — BUILD TARGET 1 (ingestion).
 
-Pulls today's scheduled releases + consensus from Finnhub (or FMP). Ranks events
-by cross-asset transmission power (reference section 3), flags high_impact via
-config.calendar.high_impact_events, and optionally attaches prior Citi surprise.
+PRIMARY source = FMP (Financial Modeling Prep) economic calendar (Kaan's choice).
+Optional SECONDARY fallback = Finnhub, used only if FMP yields nothing AND a
+Finnhub key exists.
 
-    fetch_calendar(config, date, *, http) -> list[CalendarEvent]
+    fetch_calendar(config, date, *, http) -> list[CalendarEvent]          (legacy)
+    fetch_calendar_with_status(config, date, *, http)
+        -> (list[CalendarEvent], degraded_reason: str | None)
 
-Returns [] on failure (graceful degradation — an empty calendar strip, not a crash).
+NO SILENT SWALLOW (post-first-live-run fix): an HTTP/auth/access error (missing
+key, 401/403, non-2xx, network/parse failure) returns a DEGRADED reason like
+'calendar:no FMP key' / 'calendar:FMP 403' so meta.degraded_sources records it.
+A genuine empty 200 (no scheduled releases that day) is NOT degraded — the brief
+must never again show a FAILED source as a "calm / no events" morning.
+
+Ranks events by cross-asset transmission power (reference section 3), flags
+high_impact via config.calendar.high_impact_events or the provider impact field.
 """
 
 from __future__ import annotations
@@ -34,98 +43,253 @@ _TRANSMISSION_RANK: list[tuple[str, int]] = [
 
 _IMPACT_MAP = {"high": True, "3": True, "medium": False, "2": False, "low": False, "1": False}
 
+# Countries kept: US plus globally market-moving sovereigns/blocs. Empty/unknown
+# country is kept (FMP sometimes omits it for global releases); the transmission
+# rank then decides relevance.
+_KEEP_COUNTRIES = {
+    "us", "usa", "united states",
+    "eu", "ea", "euro area", "eurozone", "european union",
+    "jp", "japan", "gb", "uk", "united kingdom", "cn", "china", "de", "germany",
+}
 
-def fetch_calendar(config: Config, date: str, *, http: Optional[httpx.Client] = None) -> list[CalendarEvent]:
-    """Fetch CalendarEvent list for `date` (YYYY-MM-DD, Istanbul).
 
-    Finnhub: GET {base}/calendar/economic?from=DATE&to=DATE&token=KEY .
-    Sets high_impact from config.calendar.high_impact_events (or Finnhub's own
-    impact field), and rank from the transmission-power ordering. On any error
-    return []. Never raises.
+class _CalendarHTTPError(Exception):
+    """Raised inside a provider fetch to carry a degraded reason upward."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+def fetch_calendar(
+    config: Config, date: str, *, http: Optional[httpx.Client] = None
+) -> list[CalendarEvent]:
+    """Legacy shim: events only (drops the degraded reason). Prefer
+    fetch_calendar_with_status so an auth/HTTP failure is recorded, not hidden."""
+    events, _reason = fetch_calendar_with_status(config, date, http=http)
+    return events
+
+
+def fetch_calendar_with_status(
+    config: Config, date: str, *, http: Optional[httpx.Client] = None
+) -> tuple[list[CalendarEvent], Optional[str]]:
+    """Fetch (events, degraded_reason) for `date` (YYYY-MM-DD, Istanbul).
+
+    FMP primary, Finnhub secondary. degraded_reason is None on success (including a
+    genuine empty calendar); a 'calendar:<reason>' string on auth/HTTP/access
+    failure of the configured provider. NEVER raises.
     """
     owns_client = http is None
     client = http or httpx.Client()
     try:
-        return _fetch_finnhub(config, date, client)
-    except Exception:  # noqa: BLE001 — graceful degradation, empty strip not a crash
-        return []
+        raw = getattr(config, "raw", {}) or {}
+        cal_cfg = raw.get("calendar", {}) or {}
+        provider = str(cal_cfg.get("provider", "fmp")).strip().lower()
+        high_impact_events = [str(e).lower() for e in cal_cfg.get("high_impact_events", [])]
+
+        primary_reason: Optional[str] = None
+        events: list[CalendarEvent] = []
+
+        # --- PRIMARY ---
+        try:
+            if provider == "finnhub":
+                events = _fetch_finnhub(config, date, client, high_impact_events)
+            else:
+                events = _fetch_fmp(config, date, client, high_impact_events)
+        except _CalendarHTTPError as exc:
+            primary_reason = exc.reason
+        except Exception as exc:  # noqa: BLE001 — unexpected error is still a DEGRADE, not a silent empty
+            primary_reason = f"calendar:{provider} error {type(exc).__name__}"
+
+        # --- SECONDARY fallback: only if primary yielded NOTHING and a Finnhub key exists ---
+        if not events and provider != "finnhub":
+            fh_key = _resolve_key(config, "finnhub_api_key")
+            if fh_key:
+                try:
+                    fallback = _fetch_finnhub(config, date, client, high_impact_events)
+                    if fallback:
+                        events = fallback
+                        primary_reason = None  # secondary saved us
+                except _CalendarHTTPError:
+                    pass  # keep the primary degraded reason (or empty)
+                except Exception:  # noqa: BLE001
+                    pass
+
+        return _sort_events(events), primary_reason
     finally:
         if owns_client:
             client.close()
 
 
-def _fetch_finnhub(config: Config, date: str, http: httpx.Client) -> list[CalendarEvent]:
+# ---------------------------------------------------------------------------
+# FMP (primary)
+# ---------------------------------------------------------------------------
+def _fetch_fmp(
+    config: Config, date: str, http: httpx.Client, high_impact_events: list[str]
+) -> list[CalendarEvent]:
     raw = getattr(config, "raw", {}) or {}
-    sources = raw.get("sources", {})
-    cal_cfg = raw.get("calendar", {}) or {}
-    high_impact_events = [str(e).lower() for e in cal_cfg.get("high_impact_events", [])]
+    sources = raw.get("sources", {}) or {}
+    fmp_cfg = sources.get("fmp", {}) or {}
+    base_url = fmp_cfg.get("base_url", "https://financialmodelingprep.com/api/v3")
 
-    finnhub_cfg = sources.get("finnhub", {}) or {}
-    base_url = finnhub_cfg.get("base_url", "https://finnhub.io/api/v1")
-
-    api_key = None
-    getter = getattr(config, "finnhub_api_key", None)
-    if callable(getter):
-        try:
-            api_key = getter()
-        except Exception:  # noqa: BLE001
-            api_key = None
+    api_key = _resolve_key(config, "fmp_api_key")
     if not api_key:
-        return []
+        raise _CalendarHTTPError("calendar:no FMP key")
 
-    url = f"{base_url.rstrip('/')}/calendar/economic"
-    params: dict[str, str] = {"from": date, "to": date, "token": str(api_key)}
-    resp = http.get(url, params=params, timeout=30.0)
-    resp.raise_for_status()
-    payload = resp.json()
+    url = f"{base_url.rstrip('/')}/economic_calendar"
+    params = {"from": date, "to": date, "apikey": str(api_key)}
+    try:
+        resp = http.get(url, params=params, timeout=30.0)
+    except Exception as exc:  # noqa: BLE001 — network failure -> degraded, not empty
+        raise _CalendarHTTPError(f"calendar:FMP network {type(exc).__name__}") from exc
 
-    rows = payload.get("economicCalendar", payload) if isinstance(payload, dict) else payload
-    if isinstance(rows, dict):
-        rows = rows.get("result", [])
-    if not isinstance(rows, list):
-        return []
+    if resp.status_code in (401, 403):
+        raise _CalendarHTTPError(f"calendar:FMP {resp.status_code} (auth/paid-tier)")
+    if resp.status_code >= 400:
+        raise _CalendarHTTPError(f"calendar:FMP {resp.status_code}")
+
+    try:
+        payload = resp.json()
+    except Exception as exc:  # noqa: BLE001
+        raise _CalendarHTTPError("calendar:FMP bad JSON") from exc
+
+    # FMP returns a JSON list of event dicts. An object with an "Error Message"
+    # means the request was rejected (e.g. invalid/paid key) -> degraded.
+    if isinstance(payload, dict):
+        msg = payload.get("Error Message") or payload.get("error")
+        raise _CalendarHTTPError(f"calendar:FMP rejected ({str(msg)[:60]})" if msg
+                                 else "calendar:FMP unexpected object response")
+    if not isinstance(payload, list):
+        raise _CalendarHTTPError("calendar:FMP unexpected response shape")
 
     events: list[CalendarEvent] = []
-    for row in rows:
+    for row in payload:
         if not isinstance(row, dict):
             continue
-        events.append(_to_event(row, high_impact_events))
-
-    # Rank ascending (strongest transmission first); None rank sinks to the end.
-    events.sort(key=lambda e: (e.rank if e.rank is not None else 999, e.event))
+        if not _fmp_keep(row):
+            continue
+        events.append(_fmp_to_event(row, high_impact_events))
     return events
 
 
-def _to_event(row: dict, high_impact_events: list[str]) -> CalendarEvent:
+def _fmp_keep(row: dict) -> bool:
+    """US + globally market-moving filter. Unknown country kept (rank decides)."""
+    country = str(row.get("country") or row.get("currency") or "").strip().lower()
+    if not country:
+        return True
+    return country in _KEEP_COUNTRIES
+
+
+def _fmp_to_event(row: dict, high_impact_events: list[str]) -> CalendarEvent:
     title = str(row.get("event") or row.get("name") or "").strip()
-    time_val = row.get("time") or row.get("date") or row.get("datetime")
-    time_str = str(time_val) if time_val is not None else None
+    time_str = _str_or_none(row.get("date") or row.get("datetime"))
 
-    consensus = row.get("estimate")
-    if consensus is None:
-        consensus = row.get("consensus")
-    consensus = _coerce_consensus(consensus)
-
+    consensus = _coerce_consensus(row.get("estimate", row.get("consensus")))
     rank = _rank_for(title)
 
-    # high_impact: config keyword match OR provider impact field.
     title_low = title.lower()
     by_config = any(kw in title_low for kw in high_impact_events)
     impact_field = str(row.get("impact", "")).strip().lower()
     by_provider = _IMPACT_MAP.get(impact_field, False)
     high_impact = bool(by_config or by_provider)
 
-    prior = row.get("prior_citi_surprise")
-    prior = _coerce_float(prior)
+    return CalendarEvent(
+        event=title,
+        time=time_str,
+        consensus=consensus,
+        high_impact=high_impact,
+        prior_citi_surprise=_coerce_float(row.get("previous")),
+        rank=rank,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Finnhub (secondary fallback)
+# ---------------------------------------------------------------------------
+def _fetch_finnhub(
+    config: Config, date: str, http: httpx.Client, high_impact_events: list[str]
+) -> list[CalendarEvent]:
+    raw = getattr(config, "raw", {}) or {}
+    sources = raw.get("sources", {}) or {}
+    finnhub_cfg = sources.get("finnhub", {}) or {}
+    base_url = finnhub_cfg.get("base_url", "https://finnhub.io/api/v1")
+
+    api_key = _resolve_key(config, "finnhub_api_key")
+    if not api_key:
+        raise _CalendarHTTPError("calendar:no Finnhub key")
+
+    url = f"{base_url.rstrip('/')}/calendar/economic"
+    params = {"from": date, "to": date, "token": str(api_key)}
+    try:
+        resp = http.get(url, params=params, timeout=30.0)
+    except Exception as exc:  # noqa: BLE001
+        raise _CalendarHTTPError(f"calendar:Finnhub network {type(exc).__name__}") from exc
+
+    if resp.status_code in (401, 403):
+        raise _CalendarHTTPError(f"calendar:Finnhub {resp.status_code} (auth/premium-gate)")
+    if resp.status_code >= 400:
+        raise _CalendarHTTPError(f"calendar:Finnhub {resp.status_code}")
+
+    try:
+        payload = resp.json()
+    except Exception as exc:  # noqa: BLE001
+        raise _CalendarHTTPError("calendar:Finnhub bad JSON") from exc
+
+    rows = payload.get("economicCalendar", payload) if isinstance(payload, dict) else payload
+    if isinstance(rows, dict):
+        rows = rows.get("result", [])
+    if not isinstance(rows, list):
+        raise _CalendarHTTPError("calendar:Finnhub unexpected response shape")
+
+    events: list[CalendarEvent] = []
+    for row in rows:
+        if isinstance(row, dict):
+            events.append(_to_event(row, high_impact_events))
+    return events
+
+
+def _to_event(row: dict, high_impact_events: list[str]) -> CalendarEvent:
+    title = str(row.get("event") or row.get("name") or "").strip()
+    time_str = _str_or_none(row.get("time") or row.get("date") or row.get("datetime"))
+
+    consensus = _coerce_consensus(
+        row.get("estimate") if row.get("estimate") is not None else row.get("consensus")
+    )
+    rank = _rank_for(title)
+
+    title_low = title.lower()
+    by_config = any(kw in title_low for kw in high_impact_events)
+    impact_field = str(row.get("impact", "")).strip().lower()
+    by_provider = _IMPACT_MAP.get(impact_field, False)
+    high_impact = bool(by_config or by_provider)
 
     return CalendarEvent(
         event=title,
         time=time_str,
         consensus=consensus,
         high_impact=high_impact,
-        prior_citi_surprise=prior,
+        prior_citi_surprise=_coerce_float(row.get("prior_citi_surprise")),
         rank=rank,
     )
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+def _sort_events(events: list[CalendarEvent]) -> list[CalendarEvent]:
+    """Rank ascending (strongest transmission first); None rank sinks to the end."""
+    events.sort(key=lambda e: (e.rank if e.rank is not None else 999, e.event))
+    return events
+
+
+def _resolve_key(config: Config, getter_name: str) -> Optional[str]:
+    getter = getattr(config, getter_name, None)
+    if callable(getter):
+        try:
+            return getter()
+        except Exception:  # noqa: BLE001
+            return None
+    return None
 
 
 def _rank_for(title: str) -> Optional[int]:
@@ -134,6 +298,10 @@ def _rank_for(title: str) -> Optional[int]:
         if needle in low:
             return rank
     return None
+
+
+def _str_or_none(value) -> Optional[str]:
+    return str(value) if value is not None else None
 
 
 def _coerce_consensus(value) -> Optional[float | str]:
@@ -146,7 +314,7 @@ def _coerce_consensus(value) -> Optional[float | str]:
 
 
 def _coerce_float(value) -> Optional[float]:
-    if value is None:
+    if value is None or value == "":
         return None
     try:
         return float(value)

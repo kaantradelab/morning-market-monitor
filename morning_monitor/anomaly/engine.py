@@ -144,10 +144,15 @@ def _changes_for(values: np.ndarray, transform: str) -> np.ndarray:
 
 
 def _staleness_from(rs: RawSeries, lam: float) -> Staleness:
+    # Prefer ingest's age-derived is_stale (stamped on the RawSeries) so the tile's
+    # staleness badge agrees with meta.degraded_sources. Fall back to the ok-only
+    # read when ingest hasn't stamped it (e.g. fixture/offline path).
+    stamped = getattr(rs, "is_stale", None)
+    is_stale = (bool(stamped) if stamped is not None else not getattr(rs, "ok", False))
     return Staleness(
         asof=rs.asof,
         lag_desc=rs.lag_desc or "",
-        is_stale=not getattr(rs, "ok", False),
+        is_stale=is_stale,
     )
 
 

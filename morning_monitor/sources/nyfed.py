@@ -3,12 +3,19 @@
 SRF take-up rising off ~0 is an early funding-stress tell (axis 11 plumbing). The
 NY Fed publishes repo-operation results via the markets data API:
 
-    GET https://markets.newyorkfed.org/api/rp/all/results/last/{n}.json
+    GET https://markets.newyorkfed.org/api/rp/all/all/results/last/{n}.json
 
-Each result carries an operation date and a total accepted amount. We sum the
-accepted amount per date across SRF/repo operations to get a daily take-up series.
-On any error or empty response we degrade gracefully (ok=False) — a missing SRF
-tile, never a crashed run.
+(The path is /api/rp/{operationType}/{method}/results/... — the earlier
+/api/rp/all/results/last/{n}.json was MISSING the {method} segment and returned
+HTTP 400, which the broad except swallowed into an empty SRF tile.)
+
+Each result carries an operationType ('Repo' | 'Reverse Repo'), an operation date,
+and a total accepted amount. The Standing Repo Facility is the FULL-ALLOTMENT
+fixed-rate REPO leg — so we keep operationType=='Repo' and EXCLUDE 'Reverse Repo'
+(RRP, which can be hundreds of billions and would swamp the ~0 SRF signal). We sum
+the accepted SRF amount per date to get a daily take-up series. On any error or
+empty response we degrade gracefully (ok=False) — a missing SRF tile, never a
+crashed run.
 """
 
 from __future__ import annotations
@@ -19,7 +26,9 @@ import httpx
 
 from ..models import HistoryPoint, RawSeries
 
-NYFED_REPO_URL = "https://markets.newyorkfed.org/api/rp/all/results/last/{n}.json"
+# /api/rp/{operationType}/{method}/results/last/{n}.json — 'all'/'all' returns
+# both Repo + Reverse Repo; we filter to SRF (Repo, full allotment) below.
+NYFED_REPO_URL = "https://markets.newyorkfed.org/api/rp/all/all/results/last/{n}.json"
 
 
 def fetch_srf_takeup(*, http: httpx.Client, years: int = 3, tile_key: str = "srf_takeup") -> RawSeries:
@@ -58,6 +67,12 @@ def fetch_srf_takeup(*, http: httpx.Client, years: int = 3, tile_key: str = "srf
     per_date: dict[str, float] = {}
     for op in operations:
         if not isinstance(op, dict):
+            continue
+        # SRF = the full-allotment fixed-rate REPO facility. Keep 'Repo' only;
+        # EXCLUDE 'Reverse Repo' (RRP) so the ~0 SRF take-up signal is not swamped
+        # by hundreds of billions of RRP.
+        op_type = str(op.get("operationType", "")).strip().lower()
+        if op_type and op_type != "repo":
             continue
         op_date = op.get("operationDate") or op.get("operationDateTime")
         if not op_date:

@@ -91,7 +91,7 @@
                 <span class="val color-{{ tile.color }}">{{ tile.value | num }}</span>
               </div>
               <div class="row">
-                <span>Δ <b>{{ tile.change | signed }}</b></span>
+                <span>Δ <b>{{ tile.change | change_disp(tile.transform) }}</b></span>
                 {% if tile.ewma_z is not none %}<span>z <b>{{ tile.ewma_z | num }}</b></span>{% endif %}
                 {% if tile.pct_1y is not none %}<span>1y <b>{{ tile.pct_1y | num(0) }}%</b></span>{% endif %}
                 {% if tile.pct_3y is not none %}<span>3y <b>{{ tile.pct_3y | num(0) }}%</b></span>{% endif %}

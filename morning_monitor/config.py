@@ -82,6 +82,13 @@ class Config:
         """Resolve sources.finnhub.api_key_env from the environment. None if unset."""
         return self._secret("finnhub", "FINNHUB_API_KEY")
 
+    def fmp_api_key(self) -> str | None:
+        """Resolve sources.fmp.api_key_env from the environment. None if unset.
+
+        Mirrors finnhub_api_key — FMP is the PRIMARY economic-calendar source.
+        """
+        return self._secret("fmp", "FMP_API_KEY")
+
 
 def _build_tiles(raw: dict[str, Any]) -> list[TileSpec]:
     """Build the typed TileSpec list from the raw `tiles` list."""

@@ -58,6 +58,7 @@ jobs:
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
         run: |
           # The pipeline is graceful-degradation by design: a dead data source
           # becomes a stale/missing tile, it does NOT abort the run. Exit 0 even

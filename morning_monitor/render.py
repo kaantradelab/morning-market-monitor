@@ -88,6 +88,42 @@ def _fmt_signed(value: object, digits: int = 2) -> str:
     return body if body.startswith("-") or body == "—" else f"+{body}"
 
 
+def fmt_change_by_transform(change: object, transform: object) -> str:
+    """Render a tile's `change` legibly given its transform — the one place that
+    decides display magnitude/units (used by BOTH the HTML grid tile and the
+    brief card metric string, so they never diverge).
+
+    A log_return-transform tile's `change` is a one-day LOG RETURN; rounding it to
+    2 decimals turns a real +0.84% broad-USD move into a meaningless "+0.01". So:
+
+      log_return -> percent move (exp(change)-1), e.g. +0.84%  [≈ change for small moves]
+      ratio      -> percent change of the ratio,  e.g. -1.20%
+      first_diff -> the level change itself (bp-ish), with enough precision
+      sign / level / other -> signed level change
+
+    Returns '—' for a None/non-numeric change.
+    """
+    if change is None or isinstance(change, bool):
+        return "—"
+    try:
+        v = float(change)
+    except (TypeError, ValueError):
+        return "—"
+
+    t = str(transform) if transform is not None else ""
+    if t in ("log_return", "ratio"):
+        import math
+        # log_return: exact pct = exp(r)-1. ratio change is already a fractional
+        # first-difference of the ratio level -> treat as a fractional move too.
+        pct = (math.exp(v) - 1.0) * 100.0 if t == "log_return" else v * 100.0
+        return f"{pct:+.2f}%"
+    # first_diff / level / sign: the change is a level delta. Keep more precision
+    # for sub-unit moves (yields/spreads in pct points) without scientific noise.
+    a = abs(v)
+    digits = 4 if a < 0.1 else (3 if a < 1 else 2)
+    return f"{v:+.{digits}f}"
+
+
 def make_env(template_dir: Path = TEMPLATE_DIR) -> Environment:
     """Build the Jinja2 Environment (FileSystemLoader, autoescape on). Registers
     the `sparkline` filter so templates can call {{ tile.history | sparkline }}."""
@@ -100,6 +136,7 @@ def make_env(template_dir: Path = TEMPLATE_DIR) -> Environment:
     env.filters["sparkline"] = lambda hist, **kw: Markup(sparkline_svg(hist, **kw))
     env.filters["num"] = _fmt_num
     env.filters["signed"] = _fmt_signed
+    env.filters["change_disp"] = fmt_change_by_transform
     return env
 
 

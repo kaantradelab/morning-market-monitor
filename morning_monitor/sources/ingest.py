@@ -38,8 +38,8 @@ from .fred import fetch_fred_series
 from .market import fetch_yf_series
 from .nyfed import fetch_srf_takeup
 
-# Re-export the calendar fetcher so callers can do `from ...sources.ingest import fetch_calendar`.
-from .calendar import fetch_calendar  # noqa: F401,E402
+# Re-export the calendar fetchers so callers can do `from ...sources.ingest import ...`.
+from .calendar import fetch_calendar, fetch_calendar_with_status  # noqa: F401,E402
 
 # Per-tile freshness windows (expected_max_age_days). A tile older than its window
 # is flagged is_stale. Keyed by tile.key; falls back to source-family defaults.
@@ -54,6 +54,7 @@ _FRESHNESS_BY_KEY: dict[str, int] = {
     "net_liquidity": 10,    # H.4.1 weekly (Thu)
     "breadth_200dma": 5,    # EOD vendor
     "srf_takeup": 5,        # NY Fed daily ops (skips non-op days)
+    "usd_broad": 8,         # DTWEXBGS = Fed H.10 BROAD $ index; multi-day publish lag (NOT truly daily)
     "copper_gold": 5,       # daily HG=F/GC=F ratio supersedes the monthly-copper label (see note below)
     "brent": 5,
     "move_proxy": 5,
@@ -109,12 +110,22 @@ def ingest(config: Config, *, http: Optional[httpx.Client] = None) -> tuple[dict
                 tile, config, client, fred, fred_cfg, fred_key,
             )
 
-        # Apply staleness + assemble degraded list (failed OR stale).
+        # Apply staleness ONCE, stamp it onto the series (runtime-only is_stale),
+        # and assemble the degraded list from that SAME flag so the tile's
+        # staleness.is_stale and meta.degraded_sources can never disagree. A
+        # fetched-OK, in-window series (is_stale=False) is NOT degraded — even if
+        # its latest obs is a few days old within the series' own freshness window
+        # (e.g. DTWEXBGS H.10 broad publishes with a multi-day lag).
         degraded: list[str] = []
         for key, series in series_by_key.items():
+            if not series.ok:
+                series.is_stale = True
+                degraded.append(key)
+                continue
             window = _freshness_window(key, series.source)
             stale = compute_staleness(series.asof, series.lag_desc, window, today=today)
-            if not series.ok or stale:
+            series.is_stale = stale
+            if stale:
                 degraded.append(key)
 
         # A detect-on-composites anchor declared in config but never fetched (no
@@ -169,7 +180,7 @@ def _fetch_tile(tile, config: Config, client: httpx.Client, fred, fred_cfg, fred
         kind, _, rest = source.partition(":")
 
         if kind == "fred":
-            lag = "NFCI weekly" if rest in ("NFCI", "ANFCI", "STLFSI4") else "FRED daily"
+            lag = _fred_lag_desc(rest)
             return _safe(
                 lambda: fetch_fred_series(
                     rest, api_key=fred_key or "", base_url=fred_cfg["base_url"],
@@ -210,10 +221,20 @@ def _fetch_tile(tile, config: Config, client: httpx.Client, fred, fred_cfg, fred
             return _fetch_derived(key, rest, source, fred)
 
         if kind == "vendor":
-            # No reliable FREE source for vendor tiles (e.g. StockCharts $SPXA200R).
-            # Degrade gracefully: tile flagged missing/stale, run continues.
+            # No reliable FREE source for vendor tiles. breadth_200dma (% S&P
+            # >200DMA, StockCharts $SPXA200R) has NO clean free API — Nasdaq/WSJ/
+            # Barchart gate it, and self-computing needs all 500 constituents'
+            # history (out of scope for a free EOD monitor). Degrade HONESTLY:
+            # known-unavailable tile, run continues; the BREADTH axis (10) still
+            # reads via the live rsp_spy tile.
+            if key == "breadth_200dma":
+                return _degraded(
+                    key, source, "EOD vendor",
+                    "breadth_200dma unavailable: no free %>200DMA feed (StockCharts "
+                    "$SPXA200R has no clean free API) — BREADTH axis covered by rsp_spy",
+                )
             return _degraded(key, source, "EOD vendor",
-                             "no free vendor source configured (graceful degradation)")
+                             f"no free vendor source for '{rest}' (graceful degradation)")
 
         return _degraded(key, source, "", f"unknown source kind '{kind}'")
     except Exception as exc:  # noqa: BLE001 — absolute belt-and-braces; ingest never raises
@@ -261,7 +282,33 @@ def _degraded(key: str, source: str, lag_desc: str, reason: str) -> RawSeries:
     )
 
 
+# Per-FRED-series publish-cadence labels. Most FRED daily series carry a 1-2 bd
+# lag ("FRED daily"), but several are NOT truly daily and were previously
+# mislabelled — which made a healthy-but-lagged latest obs look stale/degraded:
+#   DTWEXBGS = Fed H.10 BROAD dollar index, published with a multi-day lag.
+#   NFCI/ANFCI/STLFSI4 = weekly (Wed obs, ~1wk publish lag).
+#   WALCL/WTREGEN = H.4.1 weekly (Thursday).
+_FRED_LAG_DESC: dict[str, str] = {
+    "DTWEXBGS": "Fed H.10 broad $ (multi-day lag)",
+    "NFCI": "NFCI weekly",
+    "ANFCI": "NFCI weekly",
+    "STLFSI4": "NFCI weekly",
+    "WALCL": "H.4.1 weekly Thu",
+    "WTREGEN": "H.4.1 weekly Thu",
+}
+
+
+def _fred_lag_desc(series_id: str) -> str:
+    """Publish-cadence label for a FRED series id (defaults to 'FRED daily')."""
+    return _FRED_LAG_DESC.get(series_id, "FRED daily")
+
+
 def _freshness_window(key: str, source: str) -> int:
+    # DTWEXBGS (Fed H.10 broad $) keyed by SOURCE as well as tile key, so the
+    # multi-day publish lag is honoured even if the tile key differs from the
+    # _FRESHNESS_BY_KEY entry.
+    if source == "fred:DTWEXBGS":
+        return _FRESHNESS_BY_KEY.get("usd_broad", 8)
     if key in _FRESHNESS_BY_KEY:
         return _FRESHNESS_BY_KEY[key]
     family = source.split(":", 1)[0] if source else ""

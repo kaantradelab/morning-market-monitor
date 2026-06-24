@@ -58,6 +58,12 @@ class RawSeries:
     lag_desc: str = ""                         # human freshness descriptor
     ok: bool = True                            # False if fetch failed (degraded)
     error: Optional[str] = None                # failure reason for the degraded log
+    # Runtime-only (NOT persisted to the brief JSON): set by ingest's staleness
+    # pass so the tile's Staleness.is_stale and meta.degraded_sources agree. None
+    # until ingest computes it; the anomaly engine prefers it over the ok-only
+    # fallback. A non-stale, fetched-OK series (is_stale=False) must NOT appear in
+    # degraded_sources.
+    is_stale: Optional[bool] = None
 
     @property
     def latest(self) -> Optional[float]:

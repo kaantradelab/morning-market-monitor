@@ -215,7 +215,14 @@ def build_cards(
             cross_asset_confirm_or_contradict=cross,
         )
 
-        change_txt = f"{tile.change:+.2f}" if tile.change is not None else "n/a"
+        # Render the move legibly by transform (a log_return tile's raw change of
+        # 0.0084 must read "+0.84%", not a meaningless "+0.01"). Single source of
+        # truth shared with the HTML grid tile (render.fmt_change_by_transform).
+        from .render import fmt_change_by_transform
+        change_txt = (
+            fmt_change_by_transform(tile.change, tile.transform)
+            if tile.change is not None else "n/a"
+        )
         metric = f"{tile.label} {change_txt} ({tile.source})"
         score_desc = rarity
         if tile.level_pct_756 is not None:

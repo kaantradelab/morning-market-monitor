@@ -55,6 +55,9 @@ sources:
   finnhub:
     base_url: https://finnhub.io/api/v1
     api_key_env: FINNHUB_API_KEY
+  fmp:                                     # PRIMARY economic-calendar source (Kaan's choice)
+    base_url: https://financialmodelingprep.com/api/v3
+    api_key_env: FMP_API_KEY
   yfinance:
     # no key; library handles delayed EOD/snapshot
     enabled: true
@@ -234,6 +237,7 @@ tiles:
     source: vendor:SPXA200R
     transform: first_diff
     front_screen: true
+    note: "KNOWN-UNAVAILABLE: no clean free %>200DMA feed (StockCharts $SPXA200R gated); BREADTH axis covered by rsp_spy"
   - key: rsp_spy
     axis: 10
     label: RSP/SPY (equal vs cap weight)
@@ -343,7 +347,7 @@ corr_breaks:
 # high_impact tiles get high_impact=true in the brief.
 # --------------------------------------------------------------------------
 calendar:
-  provider: finnhub          # finnhub | fmp
+  provider: fmp              # fmp (PRIMARY, Kaan's choice) | finnhub (secondary fallback)
   high_impact_events:
     - FOMC
     - CPI

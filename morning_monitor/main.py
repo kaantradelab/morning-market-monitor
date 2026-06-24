@@ -22,7 +22,7 @@ from pathlib import Path
 from . import anomaly, brief, render
 from .config import Config, load_config
 from .models import Brief, CalendarEvent, RawSeries
-from .sources.ingest import fetch_calendar, ingest
+from .sources.ingest import fetch_calendar_with_status, ingest
 
 # Turkey is permanently UTC+3 with NO daylight saving (since 2016).
 _ISTANBUL = timezone(timedelta(hours=3))
@@ -100,8 +100,12 @@ def run(config: Config, *, date: str, fixture: Path | None = None, do_render: bo
         except Exception as exc:  # noqa: BLE001 — belt-and-braces; ingest contract says it won't
             degraded.append(f"ingest:{exc!r}")
         try:
-            calendar = fetch_calendar(config, date)
-        except Exception as exc:  # noqa: BLE001
+            # NO SILENT SWALLOW: a calendar source that FAILS (auth/HTTP/access)
+            # records a degraded reason; a genuine empty 200 (no releases) does not.
+            calendar, cal_degraded = fetch_calendar_with_status(config, date)
+            if cal_degraded:
+                degraded.append(cal_degraded)
+        except Exception as exc:  # noqa: BLE001 — belt-and-braces; fetcher contract says it won't raise
             degraded.append(f"calendar:{exc!r}")
 
     # ---- 3. Anomaly enrichment ----
