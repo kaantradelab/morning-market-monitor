@@ -55,9 +55,12 @@ sources:
   finnhub:
     base_url: https://finnhub.io/api/v1
     api_key_env: FINNHUB_API_KEY
-  fmp:                                     # PRIMARY economic-calendar source (Kaan's choice)
+  fmp:                                     # DORMANT: 402/403 on free tier; kept for future
     base_url: https://financialmodelingprep.com/api/v3
     api_key_env: FMP_API_KEY
+  nasdaq_data_link:                        # Sharadar SEP breadth (SPEC-3; cloud-only pull)
+    base_url: https://data.nasdaq.com/api/v3
+    api_key_env: NASDAQ_DATA_LINK_API_KEY
   yfinance:
     # no key; library handles delayed EOD/snapshot
     enabled: true
@@ -234,10 +237,35 @@ tiles:
   - key: breadth_200dma
     axis: 10
     label: "% S&P >200DMA"
-    source: vendor:SPXA200R
+    source: sharadar:sp500_above_200dma
     transform: first_diff
     front_screen: true
-    note: "KNOWN-UNAVAILABLE: no clean free %>200DMA feed (StockCharts $SPXA200R gated); BREADTH axis covered by rsp_spy"
+    note: "% of S&P 500 members with closeadj > SMA200 (Sharadar SEP, cloud-computed)"
+  - key: breadth_50dma
+    axis: 10
+    label: "% S&P >50DMA"
+    source: sharadar:sp500_above_50dma
+    transform: first_diff
+    note: "% of S&P 500 members with closeadj > SMA50 (Sharadar SEP, cloud-computed)"
+  - key: breadth_broad_200dma
+    axis: 10
+    label: "% broad-US >200DMA"
+    source: sharadar:broad_above_200dma
+    transform: first_diff
+    front_screen: true
+    note: "% of broad-US active common-stock universe with closeadj > SMA200 (Sharadar SEP)"
+  - key: breadth_broad_50dma
+    axis: 10
+    label: "% broad-US >50DMA"
+    source: sharadar:broad_above_50dma
+    transform: first_diff
+    note: "% of broad-US active common-stock universe with closeadj > SMA50 (Sharadar SEP)"
+  - key: breadth_nhnl_52w
+    axis: 10
+    label: "52w NH-NL (broad)"
+    source: sharadar:nhnl_52w
+    transform: level
+    note: "(52w-new-highs - new-lows) / valid-members * 100; signed net % (broad-US)"
   - key: rsp_spy
     axis: 10
     label: RSP/SPY (equal vs cap weight)
@@ -347,25 +375,70 @@ corr_breaks:
 # high_impact tiles get high_impact=true in the brief.
 # --------------------------------------------------------------------------
 calendar:
-  # Economic calendar is owned by TradingView / SPEC-1 (Pine) — TV has a native
-  # calendar. The backend no longer sources it.
-  provider: "off"            # off (calendar owned by TradingView/SPEC-1) | fmp | finnhub — fmp/finnhub fetchers kept dormant
+  # SPEC-3: switched from 'off' to 'fred' (release-dates API + static FOMC schedule).
+  # FMP is dead on free tier (402/403). Finnhub kept dormant as a selectable path.
+  provider: "fred"           # fred | fmp (dormant) | finnhub (dormant) | off
   high_impact_events:
     - FOMC
     - CPI
     - NFP
     - Nonfarm Payrolls
+    - Employment Situation
     - ECB
     - BoJ
     - BoE
     - Core PCE
+    - Personal Income
     - GDP
     - Treasury Refunding
     - 10Y Auction
     - 30Y Auction
+    - Retail Sales
+    - PPI
+    - Producer Price
+    - ISM
+    - JOLTS
+    - Initial Jobless Claims
   citi_surprise:
     enabled: false           # MacroMicro scrape — confirm free availability with Kaan
     note: "normalize surprise via Citi Economic Surprise Index if scrapable"
+
+  # FRED release-date map: each entry has id (FRED release_id) and name (display label).
+  # Only these releases are surfaced in the calendar strip.
+  # IDs verified live against api.stlouisfed.org (SPEC-3 §10, 2026-06-25).
+  # NOTE: ISM Manufacturing/Services PMI are NOT in FRED (proprietary, 0 series) —
+  # intentionally omitted, no fabricated ID. ISM stays TradingView/SPEC-1's to show.
+  fred_releases:
+    - id: 10
+      name: "Consumer Price Index (CPI)"
+    - id: 50
+      name: "Employment Situation (NFP)"
+    - id: 54
+      name: "Personal Income and Outlays (PCE)"
+    - id: 53
+      name: "Gross Domestic Product (GDP)"
+    - id: 9
+      name: "Advance Retail Sales"
+    - id: 46
+      name: "Producer Price Index (PPI)"
+    - id: 180
+      name: "Initial Jobless Claims"
+    - id: 192
+      name: "Job Openings and Labor Turnover Survey (JOLTS)"
+    - id: 91
+      name: "Surveys of Consumers (UMich sentiment)"
+
+  # Static FOMC decision dates for 2026 (statement / day-2 released ~14:00 ET).
+  # Source: Federal Reserve published calendar (SPEC-3 §10 verified). Update annually.
+  fomc_dates:
+    - "2026-01-28"
+    - "2026-03-18"
+    - "2026-04-29"
+    - "2026-06-17"
+    - "2026-07-29"
+    - "2026-09-16"
+    - "2026-10-28"
+    - "2026-12-09"
 
 # --------------------------------------------------------------------------
 # QUARANTINE — intraday gauges: regime-label only, NEVER a same-morning trigger
@@ -374,3 +447,31 @@ quarantine_intraday:
   - dealer_gamma
   - zero_dte_flow
   - intraday_repo
+
+# --------------------------------------------------------------------------
+# BREADTH (SPEC-3) — Sharadar SEP cloud computation config
+# --------------------------------------------------------------------------
+breadth:
+  # Broad-US universe filters (applied to SHARADAR/TICKERS metadata)
+  broad_universe:
+    exchanges: [NYSE, NASDAQ, NYSEMKT]
+    categories:
+      - "Domestic Common Stock"
+      - "Domestic Common Stock Primary Class"
+      - "Domestic Common Stock Secondary Class"
+    isdelisted: N
+    min_close: 1.0            # penny-stock filter: exclude closeadj <= $1 per-day
+    min_marketcap: null       # null = no cap floor (Kaan-confirmed: small-cap mass is the point)
+
+  # MA windows (trading days)
+  sma_windows:
+    sma200: 200
+    sma50: 50
+    nhnl_52w: 252             # 52-week = 252 trading days
+
+  # Cache strategy (data/breadth/<key>.csv; derived % only — no raw prices)
+  # Windows sized for the WIDEST warmup tile = NH-NL 52w (252 td). SMA200 is 200 td.
+  cache:
+    backfill_calendar_days: 1600   # first run: ~4.4y → 756td baseline + 252td NH-NL warmup
+    incremental_calendar_days: 420 # subsequent runs: ~420 cal ≈ >252 td (covers NH-NL window)
+    backfill_min_rows: 750         # treat cache as backfilled once it has this many rows

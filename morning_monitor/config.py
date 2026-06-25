@@ -89,6 +89,13 @@ class Config:
         """
         return self._secret("fmp", "FMP_API_KEY")
 
+    def nasdaq_data_link_api_key(self) -> str | None:
+        """Resolve sources.nasdaq_data_link.api_key_env from the environment.
+
+        Used by the Sharadar SEP breadth computation (SPEC-3). Mirrors fred_api_key().
+        """
+        return self._secret("nasdaq_data_link", "NASDAQ_DATA_LINK_API_KEY")
+
 
 def _build_tiles(raw: dict[str, Any]) -> list[TileSpec]:
     """Build the typed TileSpec list from the raw `tiles` list."""

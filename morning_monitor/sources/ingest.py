@@ -34,6 +34,7 @@ from . import calendar as calendar_mod  # noqa: F401 — re-export convenience
 from .composites import fetch_ofr_fsi
 from .crypto import fetch_stablecoin_cap
 from .derived import build_net_liquidity, build_ratio, build_realized_vol, build_sofr_iorb
+from .breadth import fetch_breadth_series
 from .fred import fetch_fred_series
 from .market import fetch_yf_series
 from .nyfed import fetch_srf_takeup
@@ -52,7 +53,12 @@ _FRESHNESS_BY_KEY: dict[str, int] = {
     "anfci": 14,            # weekly, same cadence as NFCI
     "stlfsi4": 14,          # weekly
     "net_liquidity": 10,    # H.4.1 weekly (Thu)
-    "breadth_200dma": 5,    # EOD vendor
+    # Sharadar EOD breadth tiles — 5d absorbs weekend + occasional T+1 NDL lag
+    "breadth_200dma": 5,
+    "breadth_50dma": 5,
+    "breadth_broad_200dma": 5,
+    "breadth_broad_50dma": 5,
+    "breadth_nhnl_52w": 5,
     "srf_takeup": 5,        # NY Fed daily ops (skips non-op days)
     "usd_broad": 8,         # DTWEXBGS = Fed H.10 BROAD $ index; multi-day publish lag (NOT truly daily)
     "copper_gold": 5,       # daily HG=F/GC=F ratio supersedes the monthly-copper label (see note below)
@@ -104,10 +110,13 @@ def ingest(config: Config, *, http: Optional[httpx.Client] = None) -> tuple[dict
                 )
             return fred_cache[series_id]
 
+        # Breadth session: shared state for all sharadar: tiles (one SEP pull per run).
+        breadth_session: dict = {}
+
         series_by_key: dict[str, RawSeries] = {}
         for tile in _tiles(config):
             series_by_key[tile.key] = _fetch_tile(
-                tile, config, client, fred, fred_cfg, fred_key,
+                tile, config, client, fred, fred_cfg, fred_key, breadth_session,
             )
 
         # Apply staleness ONCE, stamp it onto the series (runtime-only is_stale),
@@ -171,7 +180,10 @@ def compute_staleness(
 # ---------------------------------------------------------------------------
 # Internal routing helpers
 # ---------------------------------------------------------------------------
-def _fetch_tile(tile, config: Config, client: httpx.Client, fred, fred_cfg, fred_key) -> RawSeries:
+def _fetch_tile(
+    tile, config: Config, client: httpx.Client, fred, fred_cfg, fred_key,
+    breadth_session: Optional[dict] = None,
+) -> RawSeries:
     """Route one TileSpec to its fetcher. Always returns a RawSeries (never raises)."""
     source = tile.source
     key = tile.key
@@ -220,19 +232,16 @@ def _fetch_tile(tile, config: Config, client: httpx.Client, fred, fred_cfg, fred
         if kind == "derived":
             return _fetch_derived(key, rest, source, fred)
 
+        if kind == "sharadar":
+            # Cloud breadth tiles from Sharadar SEP via NDL (SPEC-3).
+            # All 5 sharadar: tiles share one SEP pull via breadth_session.
+            session = breadth_session if breadth_session is not None else {}
+            return _safe(
+                lambda: fetch_breadth_series(rest, config=config, http=client, session=session),
+                key=key, source=source, lag_desc="Sharadar EOD",
+            )
+
         if kind == "vendor":
-            # No reliable FREE source for vendor tiles. breadth_200dma (% S&P
-            # >200DMA, StockCharts $SPXA200R) has NO clean free API — Nasdaq/WSJ/
-            # Barchart gate it, and self-computing needs all 500 constituents'
-            # history (out of scope for a free EOD monitor). Degrade HONESTLY:
-            # known-unavailable tile, run continues; the BREADTH axis (10) still
-            # reads via the live rsp_spy tile.
-            if key == "breadth_200dma":
-                return _degraded(
-                    key, source, "EOD vendor",
-                    "breadth_200dma unavailable: no free %>200DMA feed (StockCharts "
-                    "$SPXA200R has no clean free API) — BREADTH axis covered by rsp_spy",
-                )
             return _degraded(key, source, "EOD vendor",
                              f"no free vendor source for '{rest}' (graceful degradation)")
 

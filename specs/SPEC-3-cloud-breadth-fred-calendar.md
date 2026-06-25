@@ -163,3 +163,32 @@ Switch `calendar.provider: off → fred`. Add a `fred` path in `sources/calendar
 - [ ] Calendar-FRED populates `calendar_event`; FOMC dates present; degrades honestly.
 - [ ] Cron verified against Sharadar EOD availability; secret wired; live cloud run produces a valid brief and self-verifies.
 - [ ] All tests green; graceful degradation paths covered.
+
+---
+
+## 10. VERIFIED FACTS — overrides/refines §3–§6 (fact-verify workflow, 2026-06-25, all high-confidence, live-sourced)
+
+**Calendar / FRED (§5):**
+- Release-ID map (verified live against api.stlouisfed.org):
+  ```yaml
+  fred_releases:
+    Consumer Price Index: 10                              # CPI
+    Employment Situation: 50                              # NFP
+    Personal Income and Outlays: 54                       # PCE price index lives here
+    Gross Domestic Product: 53                            # GDP
+    Advance Monthly Sales for Retail and Food Services: 9 # Advance Retail Sales (NOT 436/494)
+    Producer Price Index: 46                              # PPI
+    Unemployment Insurance Weekly Claims Report: 180      # initial jobless claims (weekly)
+    Job Openings and Labor Turnover Survey: 192           # JOLTS
+    Surveys of Consumers: 91                              # UMich sentiment (lists prelim+final)
+  ```
+- **ISM Manufacturing PMI is NOT in FRED (proprietary, 0 series) → DROP it from the curated list. Do NOT fabricate an ID.** ISM stays TradingView/SPEC-1's to show.
+- Upcoming dates (per release): `GET https://api.stlouisfed.org/fred/release/dates?release_id=N&include_release_dates_with_no_data=true&realtime_start=<TODAY>&realtime_end=9999-12-31&sort_order=asc&limit=10&file_type=json&api_key=$FRED_API_KEY`. **`include_release_dates_with_no_data=true` is MANDATORY for FUTURE dates** (else only past). `limit` ≤ 1000. Item shape: `{release_id, release_name, date}`. PCE label derives from release 54's day.
+
+**S&P ticker normalization (§3.1): PASS-THROUGH — keep the dot.** Verified in SEP: `BRK.B→BRK.B`, `BF.B→BF.B`, plain symbols unchanged. **No `.`→`-` transform.** (Defensive only: if a source ever yields dash-class `BRK-B`, convert dash→dot before lookup; Sharadar's dash form `TICKER-PA` is preferred shares, unrelated.)
+
+**NDL pull (§4):** account is **PREMIUM** (1M-unit budget, 1 unit/page → backfill+daily negligible). Full 10k-row page ≈ **2.28s**; single latest session ≈ 1.45s (1 page, ~6246 rows, no cursor). **Backfill ~3.5–5.9M rows = 350–594 pages ≈ 13–23 min** (one-time). **Daily ~300-cal-day trailing ≈ 130 pages ≈ ~5 min.** Raw SEP universe ≈ **6246 names/day** incl. delisted (the §3.2 broad filter reduces this). Build sequential (no concurrency). `closeadj` is correct for a LIVE state read (no look-ahead); the data-bank's backtest convention (closeunadj + query-time split factor) is NOT required here — keep `closeadj`.
+
+**Cron (§6): use `cron: '7 5 * * *'` (05:07 UTC = 08:07 İst).** +9h after the 20:00 UTC NYSE close; inside the validated 05:00 UTC availability floor (4/4 scheduled local pulls landed the prior session); finishes before the 06:00 UTC (09:00 İst) brief deadline; off-round minute. **Replaces the current `37 3 * * *` (03:37 UTC = too early, only +7.5h, unvalidated) — NOT the 05:30–06:30 guess.** DST caveat: in EST winter the NYSE close shifts to 21:00 UTC → re-confirm 05:07 still clears 06:00 UTC. Cloud self-fetches from Sharadar (not the local lake).
+
+**FOMC static schedule (§5):** 2026 statement (day-2) dates — `2026-01-28, 2026-03-18*, 2026-04-29, 2026-06-17*, 2026-07-29, 2026-09-16*, 2026-10-28, 2026-12-09*` (`*` = SEP/quarterly meeting; all 8 have a press conference). 2027 tentative dates available if a forward buffer is wanted.

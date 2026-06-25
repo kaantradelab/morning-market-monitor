@@ -3,6 +3,7 @@
 PRIMARY source = FMP (Financial Modeling Prep) economic calendar (Kaan's choice).
 Optional SECONDARY fallback = Finnhub, used only if FMP yields nothing AND a
 Finnhub key exists.
+SPEC-3 addition: FRED release-dates provider (provider: fred).
 
     fetch_calendar(config, date, *, http) -> list[CalendarEvent]          (legacy)
     fetch_calendar_with_status(config, date, *, http)
@@ -20,12 +21,15 @@ high_impact via config.calendar.high_impact_events or the provider impact field.
 
 from __future__ import annotations
 
+from datetime import date as date_cls, timedelta
 from typing import Optional
 
 import httpx
 
 from ..config import Config
 from ..models import CalendarEvent
+
+_FRED_RELEASES_BASE = "https://api.stlouisfed.org/fred"
 
 # Cross-asset transmission-power ranking (reference section 3). Lower rank = stronger.
 # Keys are lowercase substrings matched against the event title.
@@ -99,7 +103,9 @@ def fetch_calendar_with_status(
 
         # --- PRIMARY ---
         try:
-            if provider == "finnhub":
+            if provider == "fred":
+                events = _fetch_fred(config, date, client, high_impact_events)
+            elif provider == "finnhub":
                 events = _fetch_finnhub(config, date, client, high_impact_events)
             else:
                 events = _fetch_fmp(config, date, client, high_impact_events)
@@ -109,7 +115,8 @@ def fetch_calendar_with_status(
             primary_reason = f"calendar:{provider} error {type(exc).__name__}"
 
         # --- SECONDARY fallback: only if primary yielded NOTHING and a Finnhub key exists ---
-        if not events and provider != "finnhub":
+        # (FRED is self-sufficient; skip secondary for fred provider)
+        if not events and provider not in {"finnhub", "fred"}:
             fh_key = _resolve_key(config, "finnhub_api_key")
             if fh_key:
                 try:
@@ -126,6 +133,119 @@ def fetch_calendar_with_status(
     finally:
         if owns_client:
             client.close()
+
+
+# ---------------------------------------------------------------------------
+# FRED (SPEC-3 primary — release-dates API + static FOMC schedule)
+# ---------------------------------------------------------------------------
+def _fetch_fred(
+    config: Config, date: str, http: httpx.Client, high_impact_events: list[str]
+) -> list[CalendarEvent]:
+    """Fetch upcoming economic releases from FRED release/dates API + static FOMC.
+
+    Window: `date` through `date + 6 days` ("today / this week").
+    Queries the PER-RELEASE endpoint once per configured release_id
+    (SPEC-3 §10: `/fred/release/dates?release_id=N` with
+    `include_release_dates_with_no_data=true`, `realtime_start=<today>`,
+    `realtime_end=9999-12-31`, `sort_order=asc` — the global `releases/dates`
+    endpoint with a bounded realtime window returns only PAST dates, producing a
+    perpetually-empty calendar). Returned dates are filtered to the window
+    client-side. Injects static FOMC dates from config.calendar.fomc_dates.
+    A genuine empty window is NOT degraded; HTTP/auth failures raise _CalendarHTTPError.
+    """
+    raw = getattr(config, "raw", {}) or {}
+    cal_cfg = raw.get("calendar", {}) or {}
+
+    # Parse configured release map: {release_id (int): display_name (str)}
+    release_map: dict[int, str] = {}
+    for entry in (cal_cfg.get("fred_releases") or []):
+        if isinstance(entry, dict):
+            rid = entry.get("id")
+            name = entry.get("name", "")
+            if rid is not None:
+                release_map[int(rid)] = str(name)
+
+    # Date window: brief date through +6 days
+    from_date = date_cls.fromisoformat(date)
+    to_date = from_date + timedelta(days=6)
+    date_from = from_date.isoformat()
+
+    events: list[CalendarEvent] = []
+
+    # FRED release/dates — one call PER configured release_id (SPEC-3 §10)
+    if release_map:
+        fred_key = _resolve_key(config, "fred_api_key")
+        if not fred_key:
+            raise _CalendarHTTPError("calendar:no FRED key")
+        url = f"{_FRED_RELEASES_BASE}/release/dates"
+
+        for rid, title in release_map.items():
+            params = {
+                "api_key": fred_key,
+                "file_type": "json",
+                "release_id": rid,
+                "realtime_start": date_from,
+                "realtime_end": "9999-12-31",  # MANDATORY for FUTURE scheduled dates
+                "include_release_dates_with_no_data": "true",
+                "sort_order": "asc",
+                "limit": 50,  # <= 1000; the next handful of dates is plenty for a 7-day window
+            }
+            try:
+                resp = http.get(url, params=params, timeout=30.0)
+            except Exception as exc:  # noqa: BLE001
+                raise _CalendarHTTPError(f"calendar:FRED network {type(exc).__name__}") from exc
+
+            if resp.status_code in (401, 403):
+                raise _CalendarHTTPError(f"calendar:FRED {resp.status_code} (auth)")
+            if resp.status_code >= 400:
+                raise _CalendarHTTPError(f"calendar:FRED {resp.status_code}")
+
+            try:
+                payload = resp.json()
+            except Exception as exc:  # noqa: BLE001
+                raise _CalendarHTTPError("calendar:FRED bad JSON") from exc
+
+            for rd in payload.get("release_dates", []):
+                rd_raw = rd.get("date")
+                if not rd_raw:
+                    continue
+                try:
+                    rd_date = date_cls.fromisoformat(str(rd_raw)[:10])
+                except ValueError:
+                    continue
+                # Keep only dates inside the [today, today+6] window
+                if not (from_date <= rd_date <= to_date):
+                    continue
+                rank = _rank_for(title)
+                title_low = title.lower()
+                hi = any(kw in title_low for kw in high_impact_events) or (rank is not None and rank <= 3)
+                events.append(CalendarEvent(
+                    event=title,
+                    time=None,
+                    consensus=None,
+                    high_impact=hi,
+                    prior_citi_surprise=None,
+                    rank=rank,
+                ))
+
+    # Static FOMC dates: inject any that fall within the window
+    fomc_dates: list[str] = [str(d) for d in (cal_cfg.get("fomc_dates") or [])]
+    for fd in fomc_dates:
+        try:
+            fd_date = date_cls.fromisoformat(fd[:10])
+        except ValueError:
+            continue
+        if from_date <= fd_date <= to_date:
+            events.append(CalendarEvent(
+                event="FOMC Meeting (Statement)",
+                time="~14:00 ET",
+                consensus=None,
+                high_impact=True,
+                prior_citi_surprise=None,
+                rank=1,
+            ))
+
+    return events
 
 
 # ---------------------------------------------------------------------------

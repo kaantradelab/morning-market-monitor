@@ -42,21 +42,30 @@ git remote add origin git@github.com:kaantradelab/morning-market-monitor.git
 git push -u origin main
 ```
 
-### 2. Add the two repo secrets
+### 2. Add repo secrets
 
 The pipeline reads API keys from the environment; in CI they come from repo secrets.
 **Never commit the real keys** — only `.env.example` (empty) is in the repo.
 
 ```bash
-gh secret set FRED_API_KEY    --repo kaantradelab/morning-market-monitor   # FRED (St. Louis Fed) API key
-gh secret set FINNHUB_API_KEY --repo kaantradelab/morning-market-monitor   # Finnhub calendar key
+gh secret set FRED_API_KEY             --repo kaantradelab/morning-market-monitor   # FRED (St. Louis Fed) API key
+gh secret set NASDAQ_DATA_LINK_API_KEY --repo kaantradelab/morning-market-monitor   # Nasdaq Data Link (Sharadar SEP breadth)
+gh secret set FINNHUB_API_KEY          --repo kaantradelab/morning-market-monitor   # Finnhub (dormant calendar fallback)
 ```
 
 Or via the UI: **Settings → Secrets and variables → Actions → New repository secret**
-for each of `FRED_API_KEY` and `FINNHUB_API_KEY`.
+for each key above.
+
+| Secret | Required | Purpose |
+|--------|----------|---------|
+| `FRED_API_KEY` | ✅ Yes | Rates, credit, plumbing tiles + FRED calendar |
+| `NASDAQ_DATA_LINK_API_KEY` | ✅ Yes | Sharadar SEP breadth computation (SPEC-3) |
+| `FINNHUB_API_KEY` | Optional | Dormant calendar fallback; tiles degrade without it |
+| `FMP_API_KEY` | Optional | Dormant (FMP free-tier is 402/403) |
 
 > The run degrades gracefully if a key is missing (affected tiles flag stale/missing),
-> so the site still publishes — but you want both keys set for a full brief.
+> so the site still publishes — but you want `FRED_API_KEY` and `NASDAQ_DATA_LINK_API_KEY`
+> for a full brief with breadth and calendar data.
 
 ### 3. Enable GitHub Pages — source = **GitHub Actions**
 

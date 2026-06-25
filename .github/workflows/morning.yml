@@ -2,28 +2,26 @@ name: morning-brief
 
 # Runs once a morning + on-demand.
 #
-#   cron "37 3 * * *" UTC = 06:37 Istanbul (Turkey is permanently UTC+3, no DST).
+#   cron "7 5 * * *" UTC = 08:07 Istanbul (Turkey is permanently UTC+3, no DST).
 #
-# WHY 03:37 UTC — two reliability levers, after the 2026-06-25 09:00 run was
-# silently DROPPED by GitHub:
-#   1. Low-load window. GitHub warns scheduled crons are delayed (and rarely
-#      dropped) during high-load periods. Global Actions load is lowest in the
-#      02:00–05:00 UTC dead-of-night window, so drop probability is minimal here.
-#   2. Off-round minute. Humans pick round minutes, so :00/:15/:30/:45 are the
-#      most congested slots (:00 worst). :37 dodges all of them — this is the
-#      bigger win than the hour itself.
-#   https://docs.github.com/actions/using-workflows/events-that-trigger-workflows#schedule
-#
-# No data-freshness cost: the brief is built from the prior US session's
-# EOD/snapshot data (US close ~20:00 UTC); nothing new prints overnight, so
-# 06:37 İst sees the exact same data a 09:00 İst run would — just earlier and
-# more reliably, ready before the Istanbul morning.
+# WHY 05:07 UTC (SPEC-3 §10 verified cron):
+#   - The cloud run self-fetches the prior US session directly from Sharadar/NDL
+#     (NOT the local data-bank). 05:07 UTC is +9h after the 20:00 UTC NYSE close.
+#   - Sharadar EOD is available by ~05:00 UTC (validated floor: 4/4 scheduled
+#     pulls landed the prior session). 05:07 sits just inside that floor.
+#   - It finishes well before the 06:00 UTC (09:00 İst) brief deadline.
+#   - :07 is an off-round minute (avoids the :00/:15/:30/:45 congestion peak).
+#   - 08:07 Istanbul is a crisp morning brief — reads before markets open.
+#   - DST caveat: in EST winter the NYSE close shifts to 21:00 UTC; 05:07 UTC is
+#     still +8h and clears the 06:00 UTC deadline — re-confirm if EOD timing moves.
 #
 # NOTE: GitHub crons remain *best-effort* — a few minutes late is normal and
 # acceptable. Use the workflow_dispatch trigger below for a guaranteed manual run.
+# Previous cron guesses (03:37 UTC "37 3 * * *", 06:17 UTC "17 6 * * *") superseded
+# by SPEC-3 §10's verified 05:07 UTC.
 on:
   schedule:
-    - cron: "37 3 * * *"
+    - cron: "7 5 * * *"
   workflow_dispatch:
     inputs:
       date:
@@ -72,6 +70,7 @@ jobs:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          NASDAQ_DATA_LINK_API_KEY: ${{ secrets.NASDAQ_DATA_LINK_API_KEY }}
         run: |
           # The pipeline is graceful-degradation by design: a dead data source
           # becomes a stale/missing tile, it does NOT abort the run. Exit 0 even
@@ -105,7 +104,10 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Only the durable per-day records under data/ are committed.
+          # Commit durable records: per-day brief JSON (data/*.json),
+          # the derived breadth % series (data/breadth/*.csv — license-safe aggregates),
+          # and the S&P 500 constituent list (data/universe/sp500.csv).
+          # Raw Sharadar prices are NEVER committed (license constraint).
           # The rendered site/ is a CI build artifact (gitignored) — never committed.
           git add data/
           if git diff --staged --quiet; then

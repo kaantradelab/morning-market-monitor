@@ -118,9 +118,15 @@ def test_load_config_builds_tiles_and_stable_hash():
     cfg = load_config(CONFIG_PATH)
     assert isinstance(cfg, Config)
     assert cfg.config_hash and len(cfg.config_hash) == 12
-    # 25 CORE tiles in config.yaml (incl. anfci + stlfsi4 composite anchors).
-    assert len(cfg.tiles) == 25
-    assert {t.key for t in cfg.tiles} >= {"ofr_fsi", "vix", "hy_oas", "sofr_iorb"}
+    # 29 CORE tiles: original 25 + 4 new breadth tiles (SPEC-3: breadth_50dma,
+    # breadth_broad_200dma, breadth_broad_50dma, breadth_nhnl_52w).
+    assert len(cfg.tiles) == 29
+    assert {t.key for t in cfg.tiles} >= {
+        "ofr_fsi", "vix", "hy_oas", "sofr_iorb",
+        # New SPEC-3 breadth tiles
+        "breadth_200dma", "breadth_50dma", "breadth_broad_200dma",
+        "breadth_broad_50dma", "breadth_nhnl_52w", "rsp_spy",
+    }
     # Typed knob accessors resolve.
     assert cfg.vol_model == "ewma"
     assert cfg.percentile_window == "3y"
@@ -146,6 +152,48 @@ def test_secret_accessors_read_env(monkeypatch):
     assert cfg.fred_api_key() is None
     monkeypatch.setenv("FRED_API_KEY", "secret123")
     assert cfg.fred_api_key() == "secret123"
+
+
+def test_nasdaq_data_link_api_key_accessor(monkeypatch):
+    """nasdaq_data_link_api_key() reads NASDAQ_DATA_LINK_API_KEY from env (SPEC-3)."""
+    cfg = load_config(CONFIG_PATH)
+    monkeypatch.delenv("NASDAQ_DATA_LINK_API_KEY", raising=False)
+    assert cfg.nasdaq_data_link_api_key() is None
+    monkeypatch.setenv("NASDAQ_DATA_LINK_API_KEY", "ndl-key-xyz")
+    assert cfg.nasdaq_data_link_api_key() == "ndl-key-xyz"
+
+
+def test_breadth_tiles_in_config():
+    """All 5 SPEC-3 breadth tiles are present in config with correct sharadar: sources."""
+    cfg = load_config(CONFIG_PATH)
+    tile_map = {t.key: t for t in cfg.tiles}
+
+    # Verify all 5 breadth tiles exist with correct sharadar: source routing
+    assert tile_map["breadth_200dma"].source == "sharadar:sp500_above_200dma"
+    assert tile_map["breadth_50dma"].source == "sharadar:sp500_above_50dma"
+    assert tile_map["breadth_broad_200dma"].source == "sharadar:broad_above_200dma"
+    assert tile_map["breadth_broad_50dma"].source == "sharadar:broad_above_50dma"
+    assert tile_map["breadth_nhnl_52w"].source == "sharadar:nhnl_52w"
+
+    # rsp_spy must be UNCHANGED (SPEC-3 hard guardrail)
+    assert tile_map["rsp_spy"].source == "yfinance:RSP,SPY"
+    assert tile_map["rsp_spy"].transform == "ratio"
+
+    # SPEC-3 transform rules: MA tiles use first_diff, nhnl uses level
+    assert tile_map["breadth_200dma"].transform == "first_diff"
+    assert tile_map["breadth_50dma"].transform == "first_diff"
+    assert tile_map["breadth_nhnl_52w"].transform == "level"
+
+
+def test_calendar_provider_is_fred():
+    """Config must have calendar.provider='fred' after SPEC-3 switch from 'off'."""
+    cfg = load_config(CONFIG_PATH)
+    cal_cfg = (cfg.raw.get("calendar") or {})
+    assert cal_cfg.get("provider") == "fred", \
+        "calendar.provider must be 'fred' (SPEC-3 §5)"
+    assert "fred_releases" in cal_cfg, "fred_releases must be in calendar config"
+    assert "fomc_dates" in cal_cfg, "fomc_dates must be in calendar config"
+    assert len(cal_cfg["fomc_dates"]) >= 4, "At least 4 FOMC dates expected for 2026"
 
 
 # ===========================================================================
@@ -267,7 +315,7 @@ def test_full_pipeline_on_fixture_writes_valid_json_and_html(tmp_path, brief_sch
     assert brief.schema_version == "1.0.0"
     assert brief.meta.date == "2026-06-24"
     assert brief.meta.config_hash == cfg.config_hash
-    assert len(brief.tiles) == 25                      # one per CORE tile (degraded demo excluded)
+    assert len(brief.tiles) == 29                      # one per CORE tile (degraded demo excluded)
     # Thin fixture history -> calm morning, no manufactured Reds (calibration guard).
     assert brief.meta.calm_morning is True
     assert sum(1 for t in brief.tiles if t.color == "red") <= 1
@@ -310,7 +358,8 @@ def test_pipeline_degrades_not_crashes_on_empty_series(tmp_path):
         instance=payload, schema=json.loads(SCHEMA_PATH.read_text())
     )
     # Every config tile still appears (as a gray, no-data tile) — never a crash.
-    assert len(brief.tiles) == 25
+    # 29 tiles: original 25 + 4 new SPEC-3 breadth tiles.
+    assert len(brief.tiles) == 29
     assert all(t.color == "gray" for t in brief.tiles)
 
 
@@ -327,7 +376,8 @@ def test_main_cli_exit_zero_on_fixture(tmp_path, capsys):
     sandbox_cfg.write_text(yaml.safe_dump(raw))
 
     rc = main_mod.main(
-        ["--config", str(sandbox_cfg), "--fixture", str(FIXTURE_PATH), "--no-render"]
+        ["--config", str(sandbox_cfg), "--fixture", str(FIXTURE_PATH),
+         "--date", "2026-06-24", "--no-render"]
     )
     assert rc == 0
     out = capsys.readouterr().out

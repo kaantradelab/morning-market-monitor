@@ -148,23 +148,32 @@ def test_calendar_off_yields_empty_and_no_degraded(provider):
     assert reason is None
 
 
-def test_calendar_default_config_is_off():
-    """The shipped config.yaml turns the backend calendar OFF -> no degraded entry."""
+def test_calendar_default_config_is_fred():
+    """SPEC-3: the shipped config.yaml uses provider='fred' for the economic calendar.
+
+    FRED network errors degrade gracefully (no exception; reason is set).
+    The provider is no longer 'off' — calendar is fully wired to FRED release-dates.
+    """
     from morning_monitor.sources.calendar import fetch_calendar_with_status
 
     cfg = load_config(CONFIG_PATH)
-    assert str(cfg.raw.get("calendar", {}).get("provider", "")).strip().lower() == "off"
+    provider = str(cfg.raw.get("calendar", {}).get("provider", "")).strip().lower()
+    assert provider == "fred", \
+        f"SPEC-3 requires calendar.provider='fred', got '{provider}'"
 
     class _BoomClient:
+        """Simulates FRED being unreachable — must degrade, not crash."""
         def get(self, *a, **k):
-            raise AssertionError("calendar OFF must make NO HTTP call")
+            raise ConnectionError("FRED unreachable (test isolation)")
 
         def close(self):
             pass
 
+    # With FRED unreachable, calendar degrades honestly — empty list + degraded reason.
     events, reason = fetch_calendar_with_status(cfg, "2026-06-24", http=_BoomClient())
-    assert events == []
-    assert reason is None
+    assert events == [], "FRED network failure must yield empty events"
+    assert reason is not None, "FRED network failure must set a degraded reason (no silent swallow)"
+    assert "calendar" in reason.lower() or "FRED" in reason
 
 
 def test_calendar_no_key_is_degraded_not_silent_empty():
