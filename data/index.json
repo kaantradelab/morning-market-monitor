@@ -2,6 +2,17 @@
   "schema_version": "1.0.0",
   "days": [
     {
+      "date": "2026-06-25",
+      "run_ts_utc": "2026-06-25T07:58:56Z",
+      "calm_morning": true,
+      "red_count": 1,
+      "card_count": 1,
+      "degraded_sources": [
+        "breadth_200dma"
+      ],
+      "file": "2026-06-25.json"
+    },
+    {
       "date": "2026-06-24",
       "run_ts_utc": "2026-06-24T17:49:41Z",
       "calm_morning": false,
