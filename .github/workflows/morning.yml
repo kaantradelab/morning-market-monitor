@@ -2,21 +2,28 @@ name: morning-brief
 
 # Runs once a morning + on-demand.
 #
-#   cron "12 6 * * *" UTC = 09:12 Istanbul (Turkey is permanently UTC+3, no DST).
+#   cron "37 3 * * *" UTC = 06:37 Istanbul (Turkey is permanently UTC+3, no DST).
 #
-# WHY :12 and not :00 — GitHub explicitly warns that scheduled crons are delayed
-# (and on rare occasions DROPPED entirely) during high-load windows, and the top
-# of every hour (:00) is the single most congested slot. The 2026-06-25 09:00 run
-# was skipped for exactly this reason. Scheduling a few minutes off the hour
-# sharply reduces the drop probability. See:
-# https://docs.github.com/actions/using-workflows/events-that-trigger-workflows#schedule
+# WHY 03:37 UTC — two reliability levers, after the 2026-06-25 09:00 run was
+# silently DROPPED by GitHub:
+#   1. Low-load window. GitHub warns scheduled crons are delayed (and rarely
+#      dropped) during high-load periods. Global Actions load is lowest in the
+#      02:00–05:00 UTC dead-of-night window, so drop probability is minimal here.
+#   2. Off-round minute. Humans pick round minutes, so :00/:15/:30/:45 are the
+#      most congested slots (:00 worst). :37 dodges all of them — this is the
+#      bigger win than the hour itself.
+#   https://docs.github.com/actions/using-workflows/events-that-trigger-workflows#schedule
 #
-# NOTE: even off-hour, GitHub crons remain *best-effort* — a few minutes late is
-# normal and acceptable for a once-a-morning brief on EOD/snapshot data. Use the
-# workflow_dispatch trigger below for a guaranteed manual run.
+# No data-freshness cost: the brief is built from the prior US session's
+# EOD/snapshot data (US close ~20:00 UTC); nothing new prints overnight, so
+# 06:37 İst sees the exact same data a 09:00 İst run would — just earlier and
+# more reliably, ready before the Istanbul morning.
+#
+# NOTE: GitHub crons remain *best-effort* — a few minutes late is normal and
+# acceptable. Use the workflow_dispatch trigger below for a guaranteed manual run.
 on:
   schedule:
-    - cron: "12 6 * * *"
+    - cron: "37 3 * * *"
   workflow_dispatch:
     inputs:
       date:
