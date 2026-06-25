@@ -2,14 +2,18 @@
   "schema_version": "1.0.0",
   "meta": {
     "date": "2026-06-25",
-    "run_ts_utc": "2026-06-25T07:58:56Z",
+    "run_ts_utc": "2026-06-25T10:30:29Z",
     "config_hash": "1e9ad7396383",
     "vol_model": "ewma",
     "percentile_window": "3y",
     "fpr_control": "fdr",
     "calm_morning": true,
     "degraded_sources": [
-      "breadth_200dma"
+      "breadth_200dma",
+      "breadth_50dma",
+      "breadth_broad_200dma",
+      "breadth_broad_50dma",
+      "breadth_nhnl_52w"
     ]
   },
   "composites": {
@@ -1128,14 +1132,14 @@
       "axis": 1,
       "label": "S&P 500 / ES",
       "source": "yfinance:ES=F",
-      "value": 7486.25,
-      "change": 0.007778,
+      "value": 7485.0,
+      "change": 0.007611,
       "transform": "log_return",
-      "ewma_z": 0.787541,
-      "pct_1y": 63.888889,
-      "pct_3y": 61.986755,
+      "ewma_z": 0.770633,
+      "pct_1y": 63.095238,
+      "pct_3y": 61.456954,
       "level_pct_756": 98.148148,
-      "robust_z": 1.002537,
+      "robust_z": 0.97825,
       "color": "green",
       "staleness": {
         "asof": "2026-06-25",
@@ -1261,7 +1265,7 @@
         },
         {
           "date": "2026-06-25",
-          "value": 7486.25
+          "value": 7485.0
         }
       ],
       "is_front_screen": true,
@@ -1272,14 +1276,14 @@
       "axis": 1,
       "label": "VIX",
       "source": "yfinance:^VIX",
-      "value": 17.98,
-      "change": -0.65,
+      "value": 17.91,
+      "change": -0.719999,
       "transform": "first_diff",
-      "ewma_z": -0.367697,
-      "pct_1y": 40.47619,
-      "pct_3y": 40.770252,
-      "level_pct_756": 68.832891,
-      "robust_z": -0.651241,
+      "ewma_z": -0.407296,
+      "pct_1y": 44.047619,
+      "pct_3y": 44.488712,
+      "level_pct_756": 68.435013,
+      "robust_z": -0.732645,
       "color": "green",
       "staleness": {
         "asof": "2026-06-25",
@@ -1405,7 +1409,7 @@
         },
         {
           "date": "2026-06-25",
-          "value": 17.979999542236328
+          "value": 17.90999984741211
         }
       ],
       "is_front_screen": true,
@@ -2424,14 +2428,14 @@
       "axis": 6,
       "label": "USDJPY",
       "source": "yfinance:JPY=X",
-      "value": 161.811005,
-      "change": 0.001311,
+      "value": 161.834,
+      "change": 0.001453,
       "transform": "log_return",
-      "ewma_z": 0.514485,
-      "pct_1y": 47.222222,
-      "pct_3y": 45.899471,
+      "ewma_z": 0.570248,
+      "pct_1y": 52.380952,
+      "pct_3y": 50.0,
       "level_pct_756": 100.0,
-      "robust_z": 0.163337,
+      "robust_z": 0.194206,
       "color": "green",
       "staleness": {
         "asof": "2026-06-25",
@@ -2557,7 +2561,7 @@
         },
         {
           "date": "2026-06-25",
-          "value": 161.81100463867188
+          "value": 161.83399963378906
         }
       ],
       "is_front_screen": true,
@@ -2568,14 +2572,14 @@
       "axis": 7,
       "label": "Brent",
       "source": "yfinance:BZ=F",
-      "value": 73.220001,
-      "change": -0.007077,
+      "value": 73.029999,
+      "change": -0.009675,
       "transform": "log_return",
-      "ewma_z": -0.209549,
-      "pct_1y": 19.84127,
-      "pct_3y": 18.013245,
-      "level_pct_756": 37.301587,
-      "robust_z": -0.445024,
+      "ewma_z": -0.286488,
+      "pct_1y": 26.190476,
+      "pct_3y": 25.033113,
+      "level_pct_756": 36.640212,
+      "robust_z": -0.59298,
       "color": "green",
       "staleness": {
         "asof": "2026-06-25",
@@ -2701,7 +2705,7 @@
         },
         {
           "date": "2026-06-25",
-          "value": 73.22000122070312
+          "value": 73.02999877929688
         }
       ],
       "is_front_screen": false,
@@ -2712,14 +2716,14 @@
       "axis": 7,
       "label": "Copper / Gold ratio",
       "source": "derived:ratio:yfinance:HG=F/yfinance:GC=F",
-      "value": 0.001517,
-      "change": 2.8e-05,
+      "value": 0.001523,
+      "change": 3.4e-05,
       "transform": "ratio",
-      "ewma_z": 1.323063,
-      "pct_1y": 84.52381,
-      "pct_3y": 81.962865,
-      "level_pct_756": 38.013245,
-      "robust_z": 1.405852,
+      "ewma_z": 1.588884,
+      "pct_1y": 90.47619,
+      "pct_3y": 89.787798,
+      "level_pct_756": 38.675497,
+      "robust_z": 1.682579,
       "color": "green",
       "staleness": {
         "asof": "2026-06-25",
@@ -2845,7 +2849,7 @@
         },
         {
           "date": "2026-06-25",
-          "value": 0.0015173226554756696
+          "value": 0.0015229403875756076
         }
       ],
       "is_front_screen": false,
@@ -3143,7 +3147,7 @@
       "key": "breadth_200dma",
       "axis": 10,
       "label": "% S&P >200DMA",
-      "source": "vendor:SPXA200R",
+      "source": "sharadar:sp500_above_200dma",
       "value": null,
       "change": null,
       "transform": "first_diff",
@@ -3155,12 +3159,104 @@
       "color": "gray",
       "staleness": {
         "asof": null,
-        "lag_desc": "EOD vendor",
+        "lag_desc": "Sharadar EOD",
         "is_stale": true
       },
       "history": [],
       "is_front_screen": true,
-      "note": "KNOWN-UNAVAILABLE: no clean free %>200DMA feed (StockCharts $SPXA200R gated); BREADTH axis covered by rsp_spy"
+      "note": "% of S&P 500 members with closeadj > SMA200 (Sharadar SEP, cloud-computed)"
+    },
+    {
+      "key": "breadth_50dma",
+      "axis": 10,
+      "label": "% S&P >50DMA",
+      "source": "sharadar:sp500_above_50dma",
+      "value": null,
+      "change": null,
+      "transform": "first_diff",
+      "ewma_z": null,
+      "pct_1y": null,
+      "pct_3y": null,
+      "level_pct_756": null,
+      "robust_z": null,
+      "color": "gray",
+      "staleness": {
+        "asof": null,
+        "lag_desc": "Sharadar EOD",
+        "is_stale": true
+      },
+      "history": [],
+      "is_front_screen": false,
+      "note": "% of S&P 500 members with closeadj > SMA50 (Sharadar SEP, cloud-computed)"
+    },
+    {
+      "key": "breadth_broad_200dma",
+      "axis": 10,
+      "label": "% broad-US >200DMA",
+      "source": "sharadar:broad_above_200dma",
+      "value": null,
+      "change": null,
+      "transform": "first_diff",
+      "ewma_z": null,
+      "pct_1y": null,
+      "pct_3y": null,
+      "level_pct_756": null,
+      "robust_z": null,
+      "color": "gray",
+      "staleness": {
+        "asof": null,
+        "lag_desc": "Sharadar EOD",
+        "is_stale": true
+      },
+      "history": [],
+      "is_front_screen": true,
+      "note": "% of broad-US active common-stock universe with closeadj > SMA200 (Sharadar SEP)"
+    },
+    {
+      "key": "breadth_broad_50dma",
+      "axis": 10,
+      "label": "% broad-US >50DMA",
+      "source": "sharadar:broad_above_50dma",
+      "value": null,
+      "change": null,
+      "transform": "first_diff",
+      "ewma_z": null,
+      "pct_1y": null,
+      "pct_3y": null,
+      "level_pct_756": null,
+      "robust_z": null,
+      "color": "gray",
+      "staleness": {
+        "asof": null,
+        "lag_desc": "Sharadar EOD",
+        "is_stale": true
+      },
+      "history": [],
+      "is_front_screen": false,
+      "note": "% of broad-US active common-stock universe with closeadj > SMA50 (Sharadar SEP)"
+    },
+    {
+      "key": "breadth_nhnl_52w",
+      "axis": 10,
+      "label": "52w NH-NL (broad)",
+      "source": "sharadar:nhnl_52w",
+      "value": null,
+      "change": null,
+      "transform": "level",
+      "ewma_z": null,
+      "pct_1y": null,
+      "pct_3y": null,
+      "level_pct_756": null,
+      "robust_z": null,
+      "color": "gray",
+      "staleness": {
+        "asof": null,
+        "lag_desc": "Sharadar EOD",
+        "is_stale": true
+      },
+      "history": [],
+      "is_front_screen": false,
+      "note": "(52w-new-highs - new-lows) / valid-members * 100; signed net % (broad-US)"
     },
     {
       "key": "rsp_spy",
@@ -3743,14 +3839,14 @@
       "axis": 12,
       "label": "BTC",
       "source": "yfinance:BTC-USD",
-      "value": 61821.980469,
-      "change": 0.013465,
+      "value": 61242.308594,
+      "change": 0.004044,
       "transform": "log_return",
-      "ewma_z": 0.651852,
-      "pct_1y": 54.761905,
-      "pct_3y": 56.216931,
-      "level_pct_756": 9.656085,
-      "robust_z": 0.753616,
+      "ewma_z": 0.195784,
+      "pct_1y": 18.650794,
+      "pct_3y": 21.428571,
+      "level_pct_756": 8.730159,
+      "robust_z": 0.226173,
       "color": "green",
       "staleness": {
         "asof": "2026-06-25",
@@ -3876,7 +3972,7 @@
         },
         {
           "date": "2026-06-25",
-          "value": 61821.98046875
+          "value": 61242.30859375
         }
       ],
       "is_front_screen": false,
@@ -3887,14 +3983,14 @@
       "axis": 12,
       "label": "Stablecoin aggregate cap",
       "source": "defillama:stablecoins",
-      "value": 312389723421.27,
-      "change": -0.001542,
+      "value": 312424599667.5,
+      "change": -0.00143,
       "transform": "log_return",
-      "ewma_z": -1.127478,
-      "pct_1y": 77.380952,
-      "pct_3y": 77.645503,
+      "ewma_z": -1.045856,
+      "pct_1y": 75.0,
+      "pct_3y": 75.529101,
       "level_pct_756": 85.846561,
-      "robust_z": -0.899074,
+      "robust_z": -0.849063,
       "color": "green",
       "staleness": {
         "asof": "2026-06-25",
@@ -4020,7 +4116,7 @@
         },
         {
           "date": "2026-06-25",
-          "value": 312389723421.27
+          "value": 312424599667.5
         }
       ],
       "is_front_screen": false,
@@ -4034,8 +4130,8 @@
       "score_desc": "99th pct / +3.4-sigma; level 35th pct of 3y",
       "why_now": {
         "percentile_or_z": "99th pct / +3.4-sigma",
-        "calendar_event": null,
-        "cross_asset_confirm_or_contradict": "confirmed by HY OAS (BAMLH0A0HYM2)"
+        "calendar_event": "Gross Domestic Product (GDP)",
+        "cross_asset_confirm_or_contradict": "confirmed by HY OAS (BAMLH0A0HYM2) (but contradicted by Copper / Gold ratio)"
       },
       "color": "red",
       "is_banner": false,
@@ -4044,7 +4140,48 @@
       ]
     }
   ],
-  "calendar": [],
+  "calendar": [
+    {
+      "event": "Gross Domestic Product (GDP)",
+      "time": null,
+      "consensus": null,
+      "high_impact": true,
+      "prior_citi_surprise": null,
+      "rank": 5
+    },
+    {
+      "event": "Job Openings and Labor Turnover Survey (JOLTS)",
+      "time": null,
+      "consensus": null,
+      "high_impact": true,
+      "prior_citi_surprise": null,
+      "rank": 7
+    },
+    {
+      "event": "Initial Jobless Claims",
+      "time": null,
+      "consensus": null,
+      "high_impact": true,
+      "prior_citi_surprise": null,
+      "rank": null
+    },
+    {
+      "event": "Personal Income and Outlays (PCE)",
+      "time": null,
+      "consensus": null,
+      "high_impact": true,
+      "prior_citi_surprise": null,
+      "rank": null
+    },
+    {
+      "event": "Surveys of Consumers (UMich sentiment)",
+      "time": null,
+      "consensus": null,
+      "high_impact": false,
+      "prior_citi_surprise": null,
+      "rank": null
+    }
+  ],
   "plumbing_flags": [
     {
       "name": "srf_takeup",
@@ -4083,28 +4220,209 @@
   "corr_breaks": [
     {
       "name": "gold_vs_realyield_usd",
-      "residual_z": 1.3798,
+      "residual_z": 1.6444,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "residual +1.38 EWMA-sigma, persisted 0d (need 3d)"
+      "note": "residual +1.64 EWMA-sigma, persisted 0d (need 3d)"
     },
     {
       "name": "hy_oas_vs_acwi_vix",
-      "residual_z": 1.5979,
+      "residual_z": 1.6051,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "residual +1.60 EWMA-sigma, persisted 0d (need 3d)"
+      "note": "residual +1.61 EWMA-sigma, persisted 0d (need 3d)"
     },
     {
       "name": "stock_bond_corr",
-      "residual_z": 0.6979,
+      "residual_z": 0.6809,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "residual +0.70 EWMA-sigma, persisted 0d (need 3d)"
+      "note": "residual +0.68 EWMA-sigma, persisted 0d (need 3d)"
     }
   ],
-  "dog_didnt_bark": []
+  "dog_didnt_bark": [
+    {
+      "tile_key": "spx",
+      "event": "Gross Domestic Product (GDP)",
+      "expected_move": 0.7934,
+      "realized_move": 0.776,
+      "ratio": 0.9781,
+      "triggered": false,
+      "note": "realized 0.78sigma vs expected 0.79sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.98, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "vix",
+      "event": "Gross Domestic Product (GDP)",
+      "expected_move": 0.7435,
+      "realized_move": 0.4073,
+      "ratio": 0.5478,
+      "triggered": false,
+      "note": "realized 0.41sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.55, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "ust_2y",
+      "event": "Gross Domestic Product (GDP)",
+      "expected_move": 0.7782,
+      "realized_move": 1.356,
+      "ratio": 1.7425,
+      "triggered": false,
+      "note": "realized 1.36sigma vs expected 0.78sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 1.74, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "hy_oas",
+      "event": "Gross Domestic Product (GDP)",
+      "expected_move": 0.7426,
+      "realized_move": 1.5355,
+      "ratio": 2.0676,
+      "triggered": false,
+      "note": "realized 1.54sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 2.07, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "usdjpy",
+      "event": "Gross Domestic Product (GDP)",
+      "expected_move": 0.7594,
+      "realized_move": 0.58,
+      "ratio": 0.7638,
+      "triggered": false,
+      "note": "realized 0.58sigma vs expected 0.76sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.76, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "spx",
+      "event": "Job Openings and Labor Turnover Survey (JOLTS)",
+      "expected_move": 0.7934,
+      "realized_move": 0.776,
+      "ratio": 0.9781,
+      "triggered": false,
+      "note": "realized 0.78sigma vs expected 0.79sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.98, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "vix",
+      "event": "Job Openings and Labor Turnover Survey (JOLTS)",
+      "expected_move": 0.7435,
+      "realized_move": 0.4073,
+      "ratio": 0.5478,
+      "triggered": false,
+      "note": "realized 0.41sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.55, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "ust_2y",
+      "event": "Job Openings and Labor Turnover Survey (JOLTS)",
+      "expected_move": 0.7782,
+      "realized_move": 1.356,
+      "ratio": 1.7425,
+      "triggered": false,
+      "note": "realized 1.36sigma vs expected 0.78sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 1.74, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "hy_oas",
+      "event": "Job Openings and Labor Turnover Survey (JOLTS)",
+      "expected_move": 0.7426,
+      "realized_move": 1.5355,
+      "ratio": 2.0676,
+      "triggered": false,
+      "note": "realized 1.54sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 2.07, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "usdjpy",
+      "event": "Job Openings and Labor Turnover Survey (JOLTS)",
+      "expected_move": 0.7594,
+      "realized_move": 0.58,
+      "ratio": 0.7638,
+      "triggered": false,
+      "note": "realized 0.58sigma vs expected 0.76sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.76, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "spx",
+      "event": "Initial Jobless Claims",
+      "expected_move": 0.7934,
+      "realized_move": 0.776,
+      "ratio": 0.9781,
+      "triggered": false,
+      "note": "realized 0.78sigma vs expected 0.79sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.98, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "vix",
+      "event": "Initial Jobless Claims",
+      "expected_move": 0.7435,
+      "realized_move": 0.4073,
+      "ratio": 0.5478,
+      "triggered": false,
+      "note": "realized 0.41sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.55, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "ust_2y",
+      "event": "Initial Jobless Claims",
+      "expected_move": 0.7782,
+      "realized_move": 1.356,
+      "ratio": 1.7425,
+      "triggered": false,
+      "note": "realized 1.36sigma vs expected 0.78sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 1.74, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "hy_oas",
+      "event": "Initial Jobless Claims",
+      "expected_move": 0.7426,
+      "realized_move": 1.5355,
+      "ratio": 2.0676,
+      "triggered": false,
+      "note": "realized 1.54sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 2.07, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "usdjpy",
+      "event": "Initial Jobless Claims",
+      "expected_move": 0.7594,
+      "realized_move": 0.58,
+      "ratio": 0.7638,
+      "triggered": false,
+      "note": "realized 0.58sigma vs expected 0.76sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.76, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "spx",
+      "event": "Personal Income and Outlays (PCE)",
+      "expected_move": 0.7934,
+      "realized_move": 0.776,
+      "ratio": 0.9781,
+      "triggered": false,
+      "note": "realized 0.78sigma vs expected 0.79sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.98, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "vix",
+      "event": "Personal Income and Outlays (PCE)",
+      "expected_move": 0.7435,
+      "realized_move": 0.4073,
+      "ratio": 0.5478,
+      "triggered": false,
+      "note": "realized 0.41sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.55, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "ust_2y",
+      "event": "Personal Income and Outlays (PCE)",
+      "expected_move": 0.7782,
+      "realized_move": 1.356,
+      "ratio": 1.7425,
+      "triggered": false,
+      "note": "realized 1.36sigma vs expected 0.78sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 1.74, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "hy_oas",
+      "event": "Personal Income and Outlays (PCE)",
+      "expected_move": 0.7426,
+      "realized_move": 1.5355,
+      "ratio": 2.0676,
+      "triggered": false,
+      "note": "realized 1.54sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 2.07, threshold 0.5) normal \u2014 confidence reduced"
+    },
+    {
+      "tile_key": "usdjpy",
+      "event": "Personal Income and Outlays (PCE)",
+      "expected_move": 0.7594,
+      "realized_move": 0.58,
+      "ratio": 0.7638,
+      "triggered": false,
+      "note": "realized 0.58sigma vs expected 0.76sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.76, threshold 0.5) normal \u2014 confidence reduced"
+    }
+  ]
 }
