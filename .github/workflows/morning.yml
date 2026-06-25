@@ -2,15 +2,21 @@ name: morning-brief
 
 # Runs once a morning + on-demand.
 #
-#   cron "0 6 * * *" UTC = 09:00 Istanbul (Turkey is permanently UTC+3, no DST).
+#   cron "12 6 * * *" UTC = 09:12 Istanbul (Turkey is permanently UTC+3, no DST).
 #
-# NOTE: GitHub scheduled crons are *best-effort* — under load they may fire a few
-# minutes (occasionally more) late, and on very rare occasions be skipped. That is
-# acceptable for a once-a-morning brief on EOD/snapshot data. Use the
+# WHY :12 and not :00 — GitHub explicitly warns that scheduled crons are delayed
+# (and on rare occasions DROPPED entirely) during high-load windows, and the top
+# of every hour (:00) is the single most congested slot. The 2026-06-25 09:00 run
+# was skipped for exactly this reason. Scheduling a few minutes off the hour
+# sharply reduces the drop probability. See:
+# https://docs.github.com/actions/using-workflows/events-that-trigger-workflows#schedule
+#
+# NOTE: even off-hour, GitHub crons remain *best-effort* — a few minutes late is
+# normal and acceptable for a once-a-morning brief on EOD/snapshot data. Use the
 # workflow_dispatch trigger below for a guaranteed manual run.
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "12 6 * * *"
   workflow_dispatch:
     inputs:
       date:
