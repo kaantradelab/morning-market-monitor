@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from datetime import date as date_cls, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call
 
@@ -25,6 +26,8 @@ import pytest
 
 # We test the breadth module functions directly
 from morning_monitor.sources.breadth import (
+    _SEP_CHUNK_DAYS,
+    _SEP_RETRY_DELAYS,
     _compute_pct_series,
     _count_cache_rows,
     _fetch_sep,
@@ -494,13 +497,17 @@ class TestPagination:
     """Multi-page cursor fixture assembled correctly; single SEP pull per session."""
 
     def test_multipage_sep_assembled(self):
-        """Two NDL pages concatenated into one DataFrame."""
+        """Two NDL pages within a single chunk concatenated into one DataFrame.
+
+        Uses a recent date_from (< _SEP_CHUNK_DAYS days ago) so the range fits
+        in exactly one chunk. Within that chunk two pages are assembled via cursor.
+        """
         page1 = _make_ndl_sep_page(
-            [["AAPL", "2024-01-02", 180.0], ["MSFT", "2024-01-02", 370.0]],
+            [["AAPL", "2026-05-01", 180.0], ["MSFT", "2026-05-01", 370.0]],
             cursor="cursor-abc",
         )
         page2 = _make_ndl_sep_page(
-            [["GOOG", "2024-01-02", 140.0]],
+            [["GOOG", "2026-05-01", 140.0]],
             cursor=None,  # last page
         )
         http = _make_mock_http([
@@ -508,11 +515,12 @@ class TestPagination:
             {"status_code": 200, "json": page2},
         ])
 
-        result = _fetch_sep(date_from="2024-01-01", api_key="key", http=http)
+        # 2026-05-01 is < _SEP_CHUNK_DAYS days before today (2026-06-25) → single chunk
+        result = _fetch_sep(date_from="2026-05-01", api_key="key", http=http)
 
         assert len(result) == 3
         assert set(result["ticker"].unique()) == {"AAPL", "MSFT", "GOOG"}
-        assert http.get.call_count == 2, "Should make exactly 2 HTTP calls (2 pages)"
+        assert http.get.call_count == 2, "Should make exactly 2 HTTP calls (2 pages in one chunk)"
 
     def test_midpagination_failure_degrades_not_raises(self):
         """REGRESSION: a non-200 on page 2+ must raise inside _fetch_sep (caught
@@ -544,7 +552,13 @@ class TestPagination:
         assert series.ok is False
 
     def test_single_sep_pull_shared_across_tiles(self):
-        """All 5 breadth tiles share ONE SEP pull via the session dict."""
+        """All 5 breadth tiles share ONE SEP pull per run via the session dict.
+
+        _BACKFILL_CALENDAR_DAYS is patched to 90 (< _SEP_CHUNK_DAYS=180) so
+        the pull fits in a single chunk and a single mock response suffices.
+        The key invariant under test is session memoization: subsequent
+        _ensure_session calls for different tiles must add ZERO new HTTP requests.
+        """
         # Single page of minimal SEP data
         rows = [["AAPL", "2024-01-02", 180.0]]
         sep_page = _make_ndl_sep_page(rows)
@@ -555,25 +569,28 @@ class TestPagination:
         wiki_html = _make_wiki_html(["AAPL"])
 
         responses = [
-            {"status_code": 200, "json": sep_page},    # SEP pull
-            {"status_code": 200, "json": tickers_page},  # TICKERS pull
-            {"status_code": 200, "text": wiki_html},    # Wikipedia
+            {"status_code": 200, "json": sep_page},      # SEP pull (1 chunk)
+            {"status_code": 200, "json": tickers_page},   # TICKERS pull
+            {"status_code": 200, "text": wiki_html},      # Wikipedia
         ]
         http = _make_mock_http(responses)
 
         cfg = _make_config()
         session: dict = {}
 
-        # Call _ensure_session (which triggers the SEP pull)
-        from morning_monitor.sources.breadth import _ensure_session
-        _ensure_session("sp500_above_200dma", config=cfg, http=http, session=session)
-        calls_after_first = http.get.call_count
+        # Patch backfill window to 90 days — fits in one chunk, avoids the
+        # need for many mock responses to cover a 1600-day chunked pull.
+        with patch.object(breadth_mod, "_BACKFILL_CALENDAR_DAYS", 90):
+            # Call _ensure_session (which triggers the SEP pull)
+            from morning_monitor.sources.breadth import _ensure_session
+            _ensure_session("sp500_above_200dma", config=cfg, http=http, session=session)
+            calls_after_first = http.get.call_count
 
-        # Call again for two more tiles — memoization must make ZERO new HTTP calls
-        # (§4: one SEP pull per run, shared across all 5 tiles). A regression that
-        # re-pulls per tile would bump call_count here.
-        _ensure_session("sp500_above_50dma", config=cfg, http=http, session=session)
-        _ensure_session("broad_above_200dma", config=cfg, http=http, session=session)
+            # Call again for two more tiles — memoization must make ZERO new HTTP calls
+            # (one SEP pull per run, shared across all 5 tiles). A regression that
+            # re-pulls per tile would bump call_count here.
+            _ensure_session("sp500_above_50dma", config=cfg, http=http, session=session)
+            _ensure_session("broad_above_200dma", config=cfg, http=http, session=session)
 
         assert "sep_initialized" in session
         assert "sep_df" in session
@@ -581,12 +598,15 @@ class TestPagination:
             "Subsequent _ensure_session calls must make NO new HTTP requests "
             "(SEP/TICKERS/Wikipedia are pulled exactly once per run)"
         )
-        # SEP itself was fetched exactly once (the first response in the list).
+        # SEP was fetched during the initial _ensure_session; subsequent tiles add nothing.
         sep_calls = [
             c for c in http.get.call_args_list
             if c.args and "SEP.json" in str(c.args[0])
         ]
-        assert len(sep_calls) == 1, "SEP must be pulled exactly once per run"
+        assert len(sep_calls) >= 1, "SEP must be pulled at least once per run"
+        assert http.get.call_count == calls_after_first, (
+            "No new SEP calls after session is warmed (memoization)"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -743,7 +763,12 @@ class TestGracefulDegradation:
         assert result.error is not None
 
     def test_wikipedia_failure_degrades_sp500_tiles_not_broad(self, tmp_path):
-        """Wikipedia failure → S&P tiles degrade; broad tiles unaffected (need no list)."""
+        """Wikipedia failure → S&P tiles degrade; broad tiles unaffected (need no list).
+
+        _BACKFILL_CALENDAR_DAYS patched to 90 so the SEP pull fits in a single
+        chunk and a single mock response suffices (avoids many chunk queries
+        consuming the TICKERS/Wikipedia mock responses prematurely).
+        """
         # Wikipedia fails
         wiki_resp = MagicMock()
         wiki_resp.status_code = 503
@@ -753,12 +778,12 @@ class TestGracefulDegradation:
         ticker_rows = [["AAPL", "NASDAQ", "N", "Domestic Common Stock"]]
         tickers_page = _make_ndl_tickers_page(ticker_rows)
 
-        # SEP data: single page
+        # SEP data: single page (no cursor)
         sep_rows = [["AAPL", "2024-01-02", 180.0]] * 5
         sep_page = _make_ndl_sep_page(sep_rows)
 
         http = MagicMock()
-        # First call = SEP, second = TICKERS, third = Wikipedia
+        # First call = SEP (1 chunk), second = TICKERS, third = Wikipedia
         http.get.side_effect = [
             MagicMock(status_code=200, json=lambda: sep_page),  # SEP
             MagicMock(status_code=200, json=lambda: tickers_page, text=""),  # TICKERS
@@ -768,7 +793,8 @@ class TestGracefulDegradation:
         cfg = _make_config()
         session: dict = {}
 
-        with patch.object(breadth_mod, "_SP500_CACHE_PATH", tmp_path / "no_cache.csv"), \
+        with patch.object(breadth_mod, "_BACKFILL_CALENDAR_DAYS", 90), \
+             patch.object(breadth_mod, "_SP500_CACHE_PATH", tmp_path / "no_cache.csv"), \
              patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
             result_sp500 = fetch_breadth_series(
                 "sp500_above_200dma", config=cfg, http=http, session=session
@@ -778,7 +804,7 @@ class TestGracefulDegradation:
                 "broad_above_200dma", config=cfg, http=http, session=session
             )
 
-        # S&P breadth should degrade (no universe list)
+        # S&P breadth should degrade (no universe list — Wikipedia returned 503)
         assert result_sp500.ok is False
         # Broad might also fail here since we have very little data (1 ticker, 5 rows),
         # but it should NOT fail due to Wikipedia — it uses broad_tickers instead
@@ -789,7 +815,7 @@ class TestGracefulDegradation:
 # ---------------------------------------------------------------------------
 # 9. Key mapping
 # ---------------------------------------------------------------------------
-class TestKeyMapping:
+class TestKeyMapping:  # noqa: D101
     def test_rest_to_key_mapping(self):
         assert _rest_to_key("sp500_above_200dma") == "breadth_200dma"
         assert _rest_to_key("sp500_above_50dma") == "breadth_50dma"
@@ -808,3 +834,287 @@ def test_broad_categories_constant():
     assert "domestic common stock secondary class" in breadth_mod._BROAD_CATEGORIES
     assert "adr common stock" not in breadth_mod._BROAD_CATEGORIES
     assert "domestic preferred stock" not in breadth_mod._BROAD_CATEGORIES
+
+
+# ---------------------------------------------------------------------------
+# 11. Retry policy — _get_with_retry and _fetch_sep transient-error handling
+# ---------------------------------------------------------------------------
+class TestRetryPolicy:
+    """_fetch_sep retries transient 5xx/429/network failures with exponential back-off."""
+
+    def test_retry_then_success(self):
+        """503 on first attempt then 200 → _fetch_sep succeeds after 1 retry.
+
+        Verifies: result contains the expected rows, exactly 2 HTTP calls are
+        made (initial + 1 retry), and time.sleep was called once before the retry.
+        Uses a date_from < _SEP_CHUNK_DAYS days ago so the range is one chunk.
+        """
+        page = _make_ndl_sep_page([["AAPL", "2026-05-01", 180.0]], cursor=None)
+        ok_resp = MagicMock()
+        ok_resp.status_code = 200
+        ok_resp.json.return_value = page
+        err_resp = MagicMock()
+        err_resp.status_code = 503
+
+        http = MagicMock()
+        http.get.side_effect = [err_resp, ok_resp]
+
+        with patch("morning_monitor.sources.breadth.time.sleep") as mock_sleep:
+            result = _fetch_sep(date_from="2026-05-01", api_key="key", http=http)
+
+        assert len(result) == 1
+        assert result["ticker"].iloc[0] == "AAPL"
+        # 2 total attempts: initial 503 + 1 retry that succeeds
+        assert http.get.call_count == 2, (
+            f"Expected 2 HTTP calls (1 initial + 1 retry), got {http.get.call_count}"
+        )
+        # sleep was called exactly once before the retry
+        mock_sleep.assert_called_once_with(_SEP_RETRY_DELAYS[0])
+
+    def test_retries_exhausted_fetch_sep_raises(self):
+        """503 repeated _SEP_RETRY_DELAYS+1 times → _fetch_sep raises RuntimeError.
+
+        4 total attempts (1 initial + 3 retries = len(_SEP_RETRY_DELAYS) + 1).
+        """
+        err_resp = MagicMock()
+        err_resp.status_code = 503
+        http = MagicMock()
+        http.get.return_value = err_resp  # every call returns 503
+
+        with patch("morning_monitor.sources.breadth.time.sleep"):
+            with pytest.raises(RuntimeError, match="HTTP request failed after"):
+                _fetch_sep(date_from="2026-05-01", api_key="key", http=http)
+
+        # Exactly 4 calls on the first (only) chunk before raising
+        assert http.get.call_count == len(_SEP_RETRY_DELAYS) + 1, (
+            f"Expected {len(_SEP_RETRY_DELAYS) + 1} attempts, got {http.get.call_count}"
+        )
+
+    def test_retries_exhausted_fetch_breadth_series_degrades_not_raises(self):
+        """Exhausted retries → _fetch_sep raises → fetch_breadth_series returns ok=False.
+
+        Confirms the never-raise contract: fetch_breadth_series catches the
+        RuntimeError from _fetch_sep and returns a degraded RawSeries.
+        """
+        err_resp = MagicMock()
+        err_resp.status_code = 503
+        http = MagicMock()
+        http.get.return_value = err_resp
+
+        cfg = _make_config()
+        with patch("morning_monitor.sources.breadth.time.sleep"):
+            result = fetch_breadth_series(
+                "sp500_above_200dma", config=cfg, http=http, session={}
+            )
+
+        assert isinstance(result, RawSeries)
+        assert result.ok is False
+        assert result.error is not None and len(result.error) > 0
+
+    def test_4xx_non_429_raises_immediately_no_retry(self):
+        """HTTP 4xx (non-429) must raise immediately — no retries, no sleep."""
+        err_resp = MagicMock()
+        err_resp.status_code = 403
+        http = MagicMock()
+        http.get.return_value = err_resp  # always 403
+
+        with patch("morning_monitor.sources.breadth.time.sleep") as mock_sleep:
+            with pytest.raises(RuntimeError, match="HTTP 403"):
+                _fetch_sep(date_from="2026-05-01", api_key="key", http=http)
+
+        # Exactly 1 call — 4xx raises without retry
+        assert http.get.call_count == 1, "4xx must not be retried"
+        mock_sleep.assert_not_called()
+
+    def test_429_is_retried_not_raised_immediately(self):
+        """HTTP 429 (rate-limit) must be retried, not treated as immediate-fail 4xx."""
+        page = _make_ndl_sep_page([["AAPL", "2026-05-01", 180.0]], cursor=None)
+        ok_resp = MagicMock()
+        ok_resp.status_code = 200
+        ok_resp.json.return_value = page
+        rate_resp = MagicMock()
+        rate_resp.status_code = 429
+
+        http = MagicMock()
+        http.get.side_effect = [rate_resp, ok_resp]
+
+        with patch("morning_monitor.sources.breadth.time.sleep"):
+            result = _fetch_sep(date_from="2026-05-01", api_key="key", http=http)
+
+        assert len(result) == 1
+        assert http.get.call_count == 2, "429 must be retried (2 calls: 429 then 200)"
+
+
+# ---------------------------------------------------------------------------
+# 12. Chunk assembly — date range > _SEP_CHUNK_DAYS issues multiple queries
+# ---------------------------------------------------------------------------
+class TestChunkAssembly:
+    """A date range spanning > _SEP_CHUNK_DAYS days issues multiple fresh chunk queries."""
+
+    def test_multi_chunk_queries_and_concat(self):
+        """370-day range → 3 chunks → 3 fresh date.gte queries → all rows concatenated.
+
+        Each chunk query carries date.gte in params (not qopts.cursor_id), so we
+        can distinguish a fresh chunk query from a cursor-follow within a chunk.
+        """
+        today = date_cls.today()
+        date_from = (today - timedelta(days=370)).isoformat()
+
+        # One row per chunk, placed at a date within each chunk's range
+        chunk1_date = (today - timedelta(days=370)).isoformat()
+        chunk2_date = (today - timedelta(days=190)).isoformat()
+        chunk3_date = (today - timedelta(days=10)).isoformat()
+
+        responses = [
+            {"status_code": 200, "json": _make_ndl_sep_page(
+                [["T001", chunk1_date, 10.0]], cursor=None)},
+            {"status_code": 200, "json": _make_ndl_sep_page(
+                [["T002", chunk2_date, 20.0]], cursor=None)},
+            {"status_code": 200, "json": _make_ndl_sep_page(
+                [["T003", chunk3_date, 30.0]], cursor=None)},
+        ]
+        http = _make_mock_http(responses)
+
+        with patch("morning_monitor.sources.breadth.time.sleep"):
+            result = _fetch_sep(date_from=date_from, api_key="key", http=http)
+
+        assert len(result) == 3, f"Expected 3 rows (one per chunk), got {len(result)}"
+        assert set(result["ticker"].unique()) == {"T001", "T002", "T003"}
+        assert http.get.call_count == 3, (
+            f"370 days / {_SEP_CHUNK_DAYS}d chunks = 3 chunk queries, got {http.get.call_count}"
+        )
+
+        # All 3 calls must be fresh chunk queries (have date.gte param, not cursor_id)
+        chunk_calls = [
+            c for c in http.get.call_args_list
+            if "date.gte" in (c.kwargs.get("params") or {})
+        ]
+        assert len(chunk_calls) == 3, (
+            f"Expected 3 calls with date.gte (fresh chunk queries), "
+            f"got {len(chunk_calls)}: {[c.kwargs for c in http.get.call_args_list]}"
+        )
+
+    def test_chunk_boundary_no_row_duplication(self):
+        """Rows at chunk boundaries must not appear twice in the output.
+
+        chunk_end and (chunk_end+1)_start are adjacent (date.lte=chunk_end,
+        date.gte=chunk_end+1), so there is no overlap.
+        """
+        today = date_cls.today()
+        date_from = (today - timedelta(days=200)).isoformat()
+
+        # Row placed exactly at the boundary between chunk 1 and chunk 2
+        boundary = (
+            date_cls.fromisoformat(date_from) + timedelta(days=_SEP_CHUNK_DAYS - 1)
+        ).isoformat()
+        next_day = (
+            date_cls.fromisoformat(date_from) + timedelta(days=_SEP_CHUNK_DAYS)
+        ).isoformat()
+
+        responses = [
+            # Chunk 1: one row at boundary date
+            {"status_code": 200, "json": _make_ndl_sep_page(
+                [["AAPL", boundary, 100.0]], cursor=None)},
+            # Chunk 2: one row at next_day (NOT boundary — no duplication)
+            {"status_code": 200, "json": _make_ndl_sep_page(
+                [["AAPL", next_day, 101.0]], cursor=None)},
+        ]
+        http = _make_mock_http(responses)
+
+        with patch("morning_monitor.sources.breadth.time.sleep"):
+            result = _fetch_sep(date_from=date_from, api_key="key", http=http)
+
+        aapl = result[result["ticker"] == "AAPL"]
+        assert len(aapl) == 2, "Boundary row + next-day row must each appear once (no duplication)"
+        assert set(aapl["date"].tolist()) == {boundary, next_day}
+
+
+# ---------------------------------------------------------------------------
+# 13. Surfaced reason — degraded sharadar entries carry error in degraded list
+# ---------------------------------------------------------------------------
+class TestDegradedReason:
+    """Sharadar breadth tiles surface their error reason in the ingest degraded list."""
+
+    def test_breadth_degraded_reason_in_ingest_output(self, monkeypatch):
+        """A degraded sharadar tile must include its error reason in the degraded list.
+
+        Without the fix, ingest() appends just the bare key (e.g. 'breadth_200dma').
+        With the fix, it appends '<key>: <error>' so meta.degraded_sources carries
+        the root cause — matching the pattern calendar uses ('calendar:FMP 403').
+        """
+        import importlib
+        # Use importlib to get the actual module object — morning_monitor.sources.__init__
+        # does `from .ingest import ingest` which shadows the module name on the package,
+        # so direct attribute navigation returns the function, not the module.
+        ingest_mod = importlib.import_module("morning_monitor.sources.ingest")
+
+        ERROR = "SEP fetch error: RuntimeError('HTTP request failed after 4 attempts')"
+
+        def _stub_breadth(rest, *, config, http, session):  # noqa: ARG001
+            return RawSeries(
+                key="breadth_200dma",
+                source="sharadar:sp500_above_200dma",
+                history=[], asof=None, lag_desc="Sharadar EOD",
+                ok=False, error=ERROR,
+            )
+
+        monkeypatch.setattr(ingest_mod, "fetch_breadth_series", _stub_breadth)
+
+        cfg = MagicMock()
+        cfg.tiles = []  # falsy → _tiles() uses cfg.raw path
+        cfg.raw = {
+            "tiles": [
+                {"key": "breadth_200dma", "axis": 1, "label": "Breadth 200dma",
+                 "source": "sharadar:sp500_above_200dma", "transform": "level"},
+            ],
+            "detect_on": {"composites": []},
+            "sources": {"fred": {"base_url": "https://api.stlouisfed.org/fred"}},
+        }
+        cfg.fred_api_key.return_value = None
+        cfg.nasdaq_data_link_api_key.return_value = None
+
+        _, degraded = ingest_mod.ingest(cfg, http=MagicMock())
+
+        # The degraded entry must carry both the key AND the error reason
+        assert any("breadth_200dma" in d and ERROR in d for d in degraded), (
+            f"Expected error reason '{ERROR}' in degraded list, got: {degraded}"
+        )
+
+    def test_non_sharadar_tiles_keep_bare_key_in_degraded(self, monkeypatch):
+        """Non-sharadar degraded tiles keep the bare key — existing contract preserved.
+
+        Only sharadar: tiles get the '<key>: <error>' treatment. Other tile
+        families (fred, yfinance, ofr, …) still appear as bare keys in degraded.
+        """
+        import importlib
+        ingest_mod = importlib.import_module("morning_monitor.sources.ingest")
+
+        def _stub_yf(ticker, *, tile_key=None):
+            return RawSeries(
+                key=tile_key or ticker, source=f"yfinance:{ticker}",
+                history=[], asof=None, lag_desc="EOD",
+                ok=False, error="yf network error",
+            )
+
+        monkeypatch.setattr(ingest_mod, "fetch_yf_series", _stub_yf)
+
+        cfg = MagicMock()
+        cfg.tiles = []
+        cfg.raw = {
+            "tiles": [
+                {"key": "brent", "axis": 0, "label": "Brent",
+                 "source": "yfinance:BZ=F", "transform": "level"},
+            ],
+            "detect_on": {"composites": []},
+            "sources": {"fred": {"base_url": "https://api.stlouisfed.org/fred"}},
+        }
+        cfg.fred_api_key.return_value = None
+
+        _, degraded = ingest_mod.ingest(cfg, http=MagicMock())
+
+        # Must be just "brent" (bare key), not "brent: yf network error"
+        brent_entries = [d for d in degraded if "brent" in d]
+        assert brent_entries, "brent tile must appear in degraded list"
+        assert all(d == "brent" for d in brent_entries), (
+            f"Non-sharadar tiles must keep bare key in degraded, got: {brent_entries}"
+        )

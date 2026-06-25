@@ -129,7 +129,14 @@ def ingest(config: Config, *, http: Optional[httpx.Client] = None) -> tuple[dict
         for key, series in series_by_key.items():
             if not series.ok:
                 series.is_stale = True
-                degraded.append(key)
+                # Surface the error reason for sharadar breadth tiles so
+                # meta.degraded_sources records it (matches calendar's pattern
+                # of 'calendar:FMP 403'). Non-sharadar tiles keep the bare key
+                # to preserve the existing degraded-list contract.
+                if series.source.startswith("sharadar:") and series.error:
+                    degraded.append(f"{key}: {series.error}")
+                else:
+                    degraded.append(key)
                 continue
             window = _freshness_window(key, series.source)
             stale = compute_staleness(series.asof, series.lag_desc, window, today=today)

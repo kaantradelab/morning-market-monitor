@@ -24,6 +24,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import time
 from datetime import date as date_cls, timedelta
 from pathlib import Path
 from typing import Any, Optional
@@ -57,6 +58,12 @@ _BROAD_EXCHANGES = {"NYSE", "NASDAQ", "NYSEMKT"}
 _SMA200 = 200
 _SMA50 = 50
 _NH_NL_WINDOW = 252  # 52-week = 252 trading days
+
+# SEP fetch chunking + retry configuration.
+# Each chunk issues a fresh cursor session bounded to <= _SEP_CHUNK_DAYS calendar
+# days so a single transient 5xx can never strand a 2400-page session.
+_SEP_CHUNK_DAYS = 180  # max calendar days per cursor session
+_SEP_RETRY_DELAYS: tuple[float, ...] = (2.0, 5.0, 12.0)  # seconds between retries (3 retries)
 
 # Calendar-day look-backs for SEP pulls.
 # Sized for the WIDEST warmup tile = NH-NL 52w (252 trading days), NOT just SMA200.
@@ -206,45 +213,99 @@ def _ensure_session(rest: str, *, config: Any, http: httpx.Client, session: dict
 
 
 # -----------------------------------------------------------------------
+# HTTP retry helper
+# -----------------------------------------------------------------------
+def _get_with_retry(
+    http: httpx.Client,
+    url: str,
+    *,
+    params: dict[str, Any],
+    timeout: float = 120.0,
+) -> Any:
+    """GET with exponential-backoff retry on transient errors.
+
+    Retry policy (uses module-level _SEP_RETRY_DELAYS):
+      - Retries on: httpx network/timeout errors, HTTP 429, HTTP >= 500.
+      - Raises immediately on: HTTP 4xx other than 429 (auth/bad-request, no benefit).
+      - Raises RuntimeError after all retry attempts are exhausted.
+    """
+    last_exc: Exception = RuntimeError("no attempts made")
+    max_attempts = len(_SEP_RETRY_DELAYS) + 1  # initial + 3 retries = 4 total
+    for attempt in range(max_attempts):
+        if attempt > 0:
+            time.sleep(_SEP_RETRY_DELAYS[attempt - 1])
+        try:
+            resp = http.get(url, params=params, timeout=timeout)
+        except Exception as exc:  # noqa: BLE001 — network / timeout
+            last_exc = exc
+            continue
+        if resp.status_code == 200:
+            return resp
+        if resp.status_code == 429 or resp.status_code >= 500:
+            last_exc = RuntimeError(f"HTTP {resp.status_code}")
+            continue
+        # 4xx (non-429): client error — no benefit to retrying
+        raise RuntimeError(f"HTTP {resp.status_code}")
+    raise RuntimeError(
+        f"HTTP request failed after {max_attempts} attempts: {last_exc!r}"
+    )
+
+
+# -----------------------------------------------------------------------
 # SEP fetch (paginated NDL datatable)
 # -----------------------------------------------------------------------
 def _fetch_sep(*, date_from: str, api_key: str, http: httpx.Client) -> pd.DataFrame:
-    """Pull SHARADAR/SEP via NDL datatables API, paginating via next_cursor_id.
+    """Pull SHARADAR/SEP via NDL datatables API with chunked date ranges and per-request retry.
 
+    Splits [date_from, today] into sequential chunks of <= _SEP_CHUNK_DAYS calendar
+    days. Each chunk issues a FRESH query (date.gte=chunk_start, date.lte=chunk_end)
+    and paginates via next_cursor_id within that chunk only. This bounds every
+    cursor session to a fraction of the total row count, so a transient error on
+    any single page only affects that chunk's retry budget — not the entire 2400-page
+    session seen in the original backfill path.
+
+    Per-request retry: httpx errors OR HTTP 5xx/429 → up to 3 retries with
+    exponential backoff via _get_with_retry. HTTP 4xx (non-429) raises immediately.
+    Keeps existing dtype coercion + dropna + sort at the end.
     Returns a DataFrame with columns: ticker, date (str), closeadj (float).
     """
-    params: dict[str, Any] = {
-        "date.gte": date_from,
-        "qopts.per_page": 10000,
-        "qopts.columns": "ticker,date,closeadj",
-        "api_key": api_key,
-    }
-    pages: list[pd.DataFrame] = []
-    page_num = 0
+    today = date_cls.today()
+    chunk_start = date_cls.fromisoformat(date_from)
+    all_pages: list[pd.DataFrame] = []
 
-    while True:
-        resp = http.get(_NDL_SEP_URL, params=params, timeout=120.0)
-        if resp.status_code != 200:
-            raise RuntimeError(f"NDL SEP HTTP {resp.status_code}")
-        payload = resp.json()
-        dt = payload.get("datatable", {})
-        cols = [c["name"] for c in dt.get("columns", [])]
-        rows = dt.get("data", [])
+    while chunk_start <= today:
+        chunk_end = min(chunk_start + timedelta(days=_SEP_CHUNK_DAYS - 1), today)
 
-        if rows:
-            pages.append(pd.DataFrame(rows, columns=cols))
-        page_num += 1
+        # Fresh query for this chunk (new cursor session — bounded page count)
+        params: dict[str, Any] = {
+            "date.gte": chunk_start.isoformat(),
+            "date.lte": chunk_end.isoformat(),
+            "qopts.per_page": 10000,
+            "qopts.columns": "ticker,date,closeadj",
+            "api_key": api_key,
+        }
 
-        cursor = (payload.get("meta") or {}).get("next_cursor_id")
-        if not cursor:
-            break
-        params = {"qopts.cursor_id": cursor, "api_key": api_key}
+        # Paginate within this chunk; each request has its own retry budget
+        while True:
+            resp = _get_with_retry(http, _NDL_SEP_URL, params=params, timeout=120.0)
+            payload = resp.json()
+            dt = payload.get("datatable", {})
+            cols = [c["name"] for c in dt.get("columns", [])]
+            rows = dt.get("data", [])
+            if rows:
+                all_pages.append(pd.DataFrame(rows, columns=cols))
+            cursor = (payload.get("meta") or {}).get("next_cursor_id")
+            if not cursor:
+                break
+            params = {"qopts.cursor_id": cursor, "api_key": api_key}
 
-    if not pages:
+        chunk_start = chunk_end + timedelta(days=1)
+
+    if not all_pages:
         return pd.DataFrame(columns=["ticker", "date", "closeadj"])
 
-    df = pd.concat(pages, ignore_index=True)
-    # Ensure correct types
+    df = pd.concat(all_pages, ignore_index=True)
+    # Ensure correct types (keep existing dtype coercion + dropna + sort)
     df["closeadj"] = pd.to_numeric(df["closeadj"], errors="coerce")
     df = df.dropna(subset=["closeadj"])
     df = df.sort_values(["ticker", "date"])
@@ -316,9 +377,7 @@ def _get_broad_universe(*, api_key: str, http: httpx.Client) -> set[str]:
     pages: list[pd.DataFrame] = []
 
     while True:
-        resp = http.get(_NDL_TICKERS_URL, params=params, timeout=60.0)
-        if resp.status_code != 200:
-            raise RuntimeError(f"NDL TICKERS HTTP {resp.status_code}")
+        resp = _get_with_retry(http, _NDL_TICKERS_URL, params=params, timeout=60.0)
         payload = resp.json()
         dt = payload.get("datatable", {})
         cols = [c["name"] for c in dt.get("columns", [])]
