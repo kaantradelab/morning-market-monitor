@@ -230,6 +230,20 @@ def _offline_ingest(monkeypatch):
                          asof=None, lag_desc="EOD delayed", ok=False, error="offline")
 
     monkeypatch.setattr(ingest_mod, "fetch_yf_series", _dead_yf)
+
+    # Neutralise the LOCAL data bank too: breadth is now data-bank-first, so an
+    # offline ingest must not read ~/data/tradingbank (external dep, slow disk).
+    # read_sep_window raises -> empty frame; 'complete' True skips any gap-fill ->
+    # breadth tiles degrade gracefully like every other offline fetcher.
+    from morning_monitor.sources import databank as _db
+
+    def _no_databank(*a, **k):
+        raise RuntimeError("data bank disabled in test")
+
+    monkeypatch.setattr(_db, "read_sep_window", _no_databank)
+    monkeypatch.setattr(_db, "databank_sep_complete", lambda *a, **k: True)
+    monkeypatch.setattr(_db, "last_trading_day", lambda *a, **k: "2026-06-26")
+    monkeypatch.setattr(_db, "broad_universe", lambda: set())
     return ingest_mod
 
 

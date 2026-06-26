@@ -6,7 +6,8 @@ Consumes a models.Brief (or a per-day JSON on disk); emits static HTML via Jinja
   site/archive/index.html      -> browseable history list
 
 Sparklines are INLINE SVG computed here at render time from each tile's history[]
-(no JS, no chart lib). Host = GitHub Pages; output is a fully static site.
+(no JS, no chart lib). Output is a fully static site opened LOCALLY in the browser
+(Mac-local arch; site/ is gitignored and rebuilt every run).
 """
 
 from __future__ import annotations

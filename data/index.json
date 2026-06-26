@@ -2,6 +2,24 @@
   "schema_version": "1.0.0",
   "days": [
     {
+      "date": "2026-06-26",
+      "run_ts_utc": "2026-06-26T13:17:35Z",
+      "calm_morning": true,
+      "red_count": 1,
+      "card_count": 1,
+      "degraded_sources": [
+        "spx",
+        "vix",
+        "usdjpy",
+        "brent",
+        "copper_gold",
+        "vix_term",
+        "rsp_spy",
+        "btc"
+      ],
+      "file": "2026-06-26.json"
+    },
+    {
       "date": "2026-06-25",
       "run_ts_utc": "2026-06-25T10:30:29Z",
       "calm_morning": true,
@@ -18,12 +36,12 @@
     },
     {
       "date": "2026-06-24",
-      "run_ts_utc": "2026-06-24T17:49:41Z",
-      "calm_morning": false,
-      "red_count": 2,
-      "card_count": 1,
+      "run_ts_utc": "2026-06-26T12:35:32Z",
+      "calm_morning": true,
+      "red_count": 0,
+      "card_count": 0,
       "degraded_sources": [
-        "breadth_200dma"
+        "move_delayed_example_degraded"
       ],
       "file": "2026-06-24.json"
     }

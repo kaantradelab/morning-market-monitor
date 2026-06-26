@@ -21,7 +21,10 @@ data/_cache/
 *.local.json
 .DS_Store
 
-# Rendered site is built by CI for Pages; keep ALL local builds out of git.
-# Invariant: site/ is never committed (incl. site/.nojekyll, which render.py
-# recreates each run and is shipped only inside the upload-pages-artifact tree).
+# Rendered site is built locally (Mac-local arch) and opened in a browser; keep
+# ALL local builds out of git. Invariant: site/ is never committed (incl.
+# site/.nojekyll, which render.py recreates each run).
 /site/
+
+# Local run logs (compute.command / launchd). Transient — never committed.
+/logs/

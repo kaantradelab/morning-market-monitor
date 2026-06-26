@@ -285,6 +285,15 @@ def test_non_stale_okay_series_not_in_degraded_and_stamped(monkeypatch):
 
     monkeypatch.setattr(ingest_mod, "fetch_fred_series", _fake_fred)
 
+    # Breadth is data-bank-first; keep this ingest offline by neutralising the
+    # LOCAL data bank (else it reads ~/data/tradingbank — slow disk, external dep).
+    from morning_monitor.sources import databank as _db
+    monkeypatch.setattr(_db, "read_sep_window",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(_db, "databank_sep_complete", lambda *a, **k: True)
+    monkeypatch.setattr(_db, "last_trading_day", lambda *a, **k: "2026-06-26")
+    monkeypatch.setattr(_db, "broad_universe", lambda: set())
+
     cfg = load_config(CONFIG_PATH)
     series, degraded = ingest_mod.ingest(cfg, http=_FailingClient())
 

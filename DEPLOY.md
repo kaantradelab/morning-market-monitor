@@ -1,5 +1,11 @@
 # Deploy — Morning Market Monitor
 
+> ⚠️ **DORMANT / ARCHIVED — this is the OLD cloud path.** The live architecture is
+> Mac-local: see **[DEPLOY-LOCAL.md](DEPLOY-LOCAL.md)**. The GitHub Actions + Pages
+> flow below is disabled (the workflow `.github/workflows/morning.yml` is kept but
+> marked dormant). It is retained for reversibility only — do not follow these
+> steps for normal operation.
+
 The brief runs once a morning on GitHub Actions, commits the per-day JSON back to
 the repo (durable history), and publishes a static HTML site to GitHub Pages.
 

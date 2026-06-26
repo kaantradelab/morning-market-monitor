@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Morning Market Monitor — daily local brief (launchd agent).
+     Runs the same payload as the "Calculate" double-click (scripts/compute.command):
+     compute the brief from the LOCAL trading data bank + FRED, render ./site/, open it.
+
+     Cadence: 08:15 LOCAL, just AFTER the trading data bank's 08:00 ingest
+     (com.tradingbank.daily-ingest) so the bank already carries the prior session
+     and breadth computes locally without an NDL gap-fill. Edit StartCalendarInterval
+     below to change the time.
+
+     INSTALL (do once, NOT done by the build):
+       mkdir -p /Users/kaanoztekin/myos/workspace/morning-market-monitor/logs  # StandardOutPath parent (logs/ is gitignored)
+       cp deploy/com.morningmonitor.daily.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.morningmonitor.daily.plist
+     VERIFY:
+       launchctl print gui/$(id -u)/com.morningmonitor.daily
+     RUN NOW (test):
+       launchctl kickstart -k gui/$(id -u)/com.morningmonitor.daily
+     UNINSTALL:
+       launchctl bootout gui/$(id -u)/com.morningmonitor.daily
+       rm ~/Library/LaunchAgents/com.morningmonitor.daily.plist
+
+     NOTE: /bin/zsh sources ~/.zshenv on every (incl. non-interactive launchd)
+     invocation, which exports NASDAQ_DATA_LINK_API_KEY / FRED_API_KEY — so the
+     scheduled job has the keys without an interactive shell. The keys are OPTIONAL:
+     breadth reads the local data bank first; NDL is only a latest-day gap-fill. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.morningmonitor.daily</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>/Users/kaanoztekin/myos/workspace/morning-market-monitor/scripts/compute.command</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>15</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/kaanoztekin/myos/workspace/morning-market-monitor/logs/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kaanoztekin/myos/workspace/morning-market-monitor/logs/launchd.err.log</string>
+</dict>
+</plist>

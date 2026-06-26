@@ -1,6 +1,6 @@
-"""Sharadar SEP breadth computation — SPEC-3 cloud breadth.
+"""Sharadar SEP breadth computation — data-bank-first (Mac-local arch).
 
-Single shared SEP pull per run (via session dict). Returns one RawSeries per breadth key.
+Single shared SEP read per run (via session dict). Returns one RawSeries per breadth key.
 
 Breadth keys (sharadar:<rest>):
   sp500_above_200dma  ->  % of S&P 500 members with closeadj > SMA200
@@ -12,10 +12,19 @@ Breadth keys (sharadar:<rest>):
 LICENSE HARD CONSTRAINT: NEVER write raw per-security prices. Only derived %
 aggregates + the constituent list (sp500.csv) may be committed/published.
 
-SEP pull strategy:
-  - First run (cache missing or <756 rows): pull ~3.8y of history (backfill).
-  - Incremental run: pull trailing ~350 calendar days (SMA200 warmup + new session).
-  - All 5 breadth tiles share ONE SEP pull per run (via the session dict).
+SEP source strategy (data-bank-first with freshness-aware NDL gap-fill):
+  - PRIMARY: read the trailing closeadj window from the LOCAL data bank
+    (morning_monitor.sources.databank) — fast, free, no NDL key required.
+  - GAP-FILL: if the data bank lags the last trading day (mid-ingest / today's
+    bar not yet appended), pull ONLY the missing date range from NDL, ticker-
+    filtered to the universe (tiny) and concat onto the data-bank window. If no
+    NDL key is available, degrade gracefully (today's bar may be missing) but
+    still compute from the data-bank history — never hard-fail.
+  - Window: first run (cache cold) reads ~1600 cal days (backfill); incremental
+    runs read ~420 cal days (covers the 252-td NH-NL warmup).
+  - Universe: S&P 500 from the committed data/universe/sp500.csv; broad-US from
+    the data bank's TICKERS.parquet (databank.broad_universe()).
+  - All 5 breadth tiles share ONE data-bank read per run (via the session dict).
   - Cache: data/breadth/<key>.csv (columns: date,value). Idempotent re-run safe.
 """
 
@@ -33,6 +42,7 @@ import httpx
 import pandas as pd
 
 from ..models import HistoryPoint, RawSeries
+from . import databank
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +74,9 @@ _NH_NL_WINDOW = 252  # 52-week = 252 trading days
 # days so a single transient 5xx can never strand a 2400-page session.
 _SEP_CHUNK_DAYS = 180  # max calendar days per cursor session
 _SEP_RETRY_DELAYS: tuple[float, ...] = (2.0, 5.0, 12.0)  # seconds between retries (3 retries)
+# Gap-fill ticker batching: NDL datatables accepts a comma-separated ticker filter.
+# ~500 per call keeps each URL bounded while the gap (1-3 days) stays tiny.
+_SEP_TICKER_BATCH = 500
 
 # Calendar-day look-backs for SEP pulls.
 # Sized for the WIDEST warmup tile = NH-NL 52w (252 trading days), NOT just SMA200.
@@ -75,6 +88,18 @@ _INCREMENTAL_CALENDAR_DAYS = 420  # >252 td after holidays — covers SMA200 AND
 
 # Minimum cached rows before we treat it as "backfill done"
 _BACKFILL_MIN_ROWS = 750
+
+# All 5 breadth cache keys (kept in sync with _rest_to_key's mapping values). The
+# backfill gate uses the MINIMUM cached depth across ALL of them so a single thin
+# tile (e.g. nhnl_52w) still forces the deep backfill-width read — picking the gate
+# off one already-warm key would strand the thin tiles on the incremental window.
+_ALL_BREADTH_KEYS: tuple[str, ...] = (
+    "breadth_200dma",
+    "breadth_50dma",
+    "breadth_broad_200dma",
+    "breadth_broad_50dma",
+    "breadth_nhnl_52w",
+)
 
 # Minimum closeadj threshold for broad-US penny-stock filter (per-day)
 _MIN_CLOSE = 1.0
@@ -153,63 +178,175 @@ def fetch_breadth_series(
 # Session initialisation (called once per run via _ensure_session)
 # -----------------------------------------------------------------------
 def _ensure_session(rest: str, *, config: Any, http: httpx.Client, session: dict) -> None:
-    """Populate session with SEP DataFrame + universe sets if not already done."""
+    """Populate session with the SEP DataFrame + universe sets if not already done.
+
+    Data-bank-first: read the trailing window from the LOCAL data bank, then
+    gap-fill ONLY the missing tail from NDL when the bank lags the last trading
+    day. NEVER raises — any failure leaves a degraded session (sep_df=None).
+    """
     if "sep_initialized" in session:
         return
 
     session["sep_initialized"] = True  # mark even if we fail below — avoid repeated failures
 
     # Cache-window knobs are config-driven (breadth.cache.*) with the module
-    # constants as fallbacks, so an operator can retune the pull windows in
+    # constants as fallbacks, so an operator can retune the read windows in
     # config.yaml without a code change.
     backfill_days, incremental_days, backfill_min_rows = _cache_window_knobs(config)
 
-    # Determine pull window (backfill vs incremental) by checking any key's cache size.
-    # Use any key since all tiles share the same backfill threshold.
-    key0 = _rest_to_key(rest)
-    cache_rows = _count_cache_rows(key0)
-    is_backfill = cache_rows < backfill_min_rows
+    # Determine read window (backfill vs incremental) from the MINIMUM cached depth
+    # across ALL 5 breadth keys — not just this tile's. Any under-filled key (e.g.
+    # a freshly-seeded nhnl_52w) must force the deep backfill-width read; gating off
+    # one already-warm key would leave the thin tiles permanently on the incremental
+    # window. The shared SEP read is computed once per run, so the widest needed
+    # window wins for everyone.
+    min_cache_rows = min(_count_cache_rows(k) for k in _ALL_BREADTH_KEYS)
+    is_backfill = min_cache_rows < backfill_min_rows
+    window_days = backfill_days if is_backfill else incremental_days
 
     today = date_cls.today()
-    if is_backfill:
-        date_from = (today - timedelta(days=backfill_days)).isoformat()
-        log.info("breadth: BACKFILL pull from %s (~%d cal days)", date_from, backfill_days)
-    else:
-        date_from = (today - timedelta(days=incremental_days)).isoformat()
-        log.info("breadth: INCREMENTAL pull from %s (~%d cal days)", date_from, incremental_days)
+    date_from = (today - timedelta(days=window_days)).isoformat()
 
-    # Resolve API key
+    # Freshness/read-window TARGET = last COMPLETED NYSE session (close <= now UTC),
+    # NOT last_trading_day (= today on a trading day). The data bank's latest bar is
+    # the last completed session; on a weekday MORNING run that is yesterday, so the
+    # bank is already complete and NO empty NDL gap-fill fires. Only AFTER the US
+    # close does the target advance to today — the one session the gap-fill pulls.
+    try:
+        last_td = databank.last_completed_session()
+    except Exception as exc:  # noqa: BLE001
+        last_td = None
+        log.warning("databank.last_completed_session failed (%s)", exc)
+    if not last_td:
+        # Catalog unavailable → fall back to last_trading_day (itself today on failure).
+        try:
+            last_td = databank.last_trading_day()
+        except Exception as exc:  # noqa: BLE001
+            last_td = today.isoformat()
+            log.warning("databank.last_trading_day fallback failed (%s); using today", exc)
+
+    log.info(
+        "breadth: %s data-bank read %s -> %s (~%d cal days)",
+        "BACKFILL" if is_backfill else "INCREMENTAL", date_from, last_td, window_days,
+    )
+
+    # --- universes FIRST (so the data-bank read + any gap pull are ticker-filtered) ---
+    sp500 = _load_sp500_cache()
+    session["sp500_tickers"] = sp500
+    if not sp500:
+        session["sp500_error"] = (
+            "S&P 500 cache (data/universe/sp500.csv) missing or empty"
+        )
+
+    try:
+        broad = databank.broad_universe()
+    except Exception as exc:  # noqa: BLE001
+        broad = set()
+        session["broad_error"] = f"broad universe error: {exc!r}"
+    session["broad_tickers"] = broad
+    if not broad and "broad_error" not in session:
+        session["broad_error"] = "broad universe empty (data bank TICKERS.parquet missing?)"
+
+    universe = sp500 | broad  # union; empty only if BOTH sources are unavailable
+
+    # --- PRIMARY: read the trailing window from the LOCAL data bank ---
+    # ALWAYS ticker-bounded: pass the universe set (never None). An empty universe
+    # short-circuits to an empty frame in read_sep_window — it must NEVER fall back
+    # to a full-universe read (that is the 24M-row / OOM footgun this arch avoids).
+    try:
+        df = databank.read_sep_window(date_from, last_td, tickers=universe)
+    except Exception as exc:  # noqa: BLE001
+        df = pd.DataFrame(columns=["ticker", "date", "closeadj"])
+        session["sep_error"] = f"data-bank read error: {exc!r}"
+
+    # --- GAP-FILL: pull ONLY the missing tail from NDL when the bank lags last_td ---
+    # Only meaningful when we have a universe to bound the (tiny) NDL pull. With no
+    # universe there is nothing to compute and a None-ticker NDL pull would be the
+    # full-universe disaster — so skip gap-fill entirely in that case.
+    if universe:
+        try:
+            complete = databank.databank_sep_complete(last_td)
+        except Exception as exc:  # noqa: BLE001
+            complete = False
+            log.warning("databank.databank_sep_complete failed (%s); assuming gap", exc)
+
+        if not complete:
+            df = _gap_fill_from_ndl(
+                df, last_td=last_td, universe=universe, config=config, http=http, session=session,
+            )
+
+    if df is None or df.empty:
+        session["sep_df"] = None
+        session.setdefault("sep_error", "no SEP rows from data bank or gap-fill")
+        return
+
+    session["sep_df"] = df
+
+
+def _gap_fill_from_ndl(
+    df: pd.DataFrame,
+    *,
+    last_td: str,
+    universe: set[str],
+    config: Any,
+    http: httpx.Client,
+    session: dict,
+) -> pd.DataFrame:
+    """Concat an NDL pull of ONLY the (databank_max, last_td] tail onto `df`.
+
+    Graceful: if there is no NDL key, or the pull fails/returns nothing, return
+    `df` unchanged (the data-bank history) — today's bar may be missing but the
+    run never hard-fails.
+    """
+    try:
+        db_max = databank.databank_max_sep_date()
+    except Exception as exc:  # noqa: BLE001
+        db_max = None
+        log.warning("databank.databank_max_sep_date failed (%s)", exc)
+
+    if db_max:
+        gap_from = (date_cls.fromisoformat(db_max) + timedelta(days=1)).isoformat()
+    else:
+        # Data bank empty for SEP — bound the NDL pull to the read window, not all-time.
+        gap_from = (date_cls.today() - timedelta(days=_INCREMENTAL_CALENDAR_DAYS)).isoformat()
+
+    if gap_from > str(last_td):
+        return df  # nothing to fill
+
+    if not universe:
+        # Caller already guards this, but never let a None-ticker NDL pull through
+        # (that is the full-universe footgun) — defence in depth.
+        return df
+
     ndl_key = _ndl_api_key(config)
     if not ndl_key:
-        session["sep_df"] = None
-        session["sep_error"] = "NASDAQ_DATA_LINK_API_KEY not set"
-        return
-
-    # Pull SEP (paginated)
-    try:
-        sep_df = _fetch_sep(date_from=date_from, api_key=ndl_key, http=http)
-        session["sep_df"] = sep_df
-    except Exception as exc:  # noqa: BLE001
-        session["sep_df"] = None
-        session["sep_error"] = f"SEP fetch error: {exc!r}"
-        return
-
-    # Build universe sets (S&P 500 and broad-US)
-    try:
-        sp500 = _get_sp500_universe(config=config, http=http, sep_tickers=set(sep_df["ticker"].unique()))
-        session["sp500_tickers"] = sp500
-    except Exception as exc:  # noqa: BLE001
-        log.warning("S&P 500 universe fetch failed: %s", exc)
-        session["sp500_tickers"] = set()
-        session["sp500_error"] = f"S&P 500 universe error: {exc!r}"
+        log.info(
+            "breadth: data bank lags %s but no NDL key; using data-bank history "
+            "(today's bar may be missing)", last_td,
+        )
+        session.setdefault("gap_fill_note", "no NDL key for gap-fill; data-bank history only")
+        return df
 
     try:
-        broad = _get_broad_universe(api_key=ndl_key, http=http)
-        session["broad_tickers"] = broad
-    except Exception as exc:  # noqa: BLE001
-        log.warning("Broad universe fetch failed: %s", exc)
-        session["broad_tickers"] = set()
-        session["broad_error"] = f"broad universe error: {exc!r}"
+        gap_df = _fetch_sep(
+            date_from=gap_from,
+            api_key=ndl_key,
+            http=http,
+            date_to=str(last_td),
+            tickers=sorted(universe),  # always bounded — never a full-universe pull
+        )
+    except Exception as exc:  # noqa: BLE001 — gap-fill is best-effort; never hard-fail
+        log.warning("breadth gap-fill NDL pull failed (%s); using data-bank history only", exc)
+        session.setdefault("gap_fill_note", f"gap-fill failed: {exc!r}")
+        return df
+
+    if gap_df is None or gap_df.empty:
+        return df
+
+    merged = pd.concat([df, gap_df], ignore_index=True)
+    # NDL revision wins on the (rare) boundary overlap — gap is strictly after db_max.
+    merged = merged.drop_duplicates(subset=["ticker", "date"], keep="last")
+    return merged.sort_values(["ticker", "date"]).reset_index(drop=True)
 
 
 # -----------------------------------------------------------------------
@@ -254,53 +391,56 @@ def _get_with_retry(
 # -----------------------------------------------------------------------
 # SEP fetch (paginated NDL datatable)
 # -----------------------------------------------------------------------
-def _fetch_sep(*, date_from: str, api_key: str, http: httpx.Client) -> pd.DataFrame:
+def _fetch_sep(
+    *,
+    date_from: str,
+    api_key: str,
+    http: httpx.Client,
+    date_to: Optional[str] = None,
+    tickers: Optional[list[str]] = None,
+) -> pd.DataFrame:
     """Pull SHARADAR/SEP via NDL datatables API with chunked date ranges and per-request retry.
 
-    Splits [date_from, today] into sequential chunks of <= _SEP_CHUNK_DAYS calendar
-    days. Each chunk issues a FRESH query (date.gte=chunk_start, date.lte=chunk_end)
-    and paginates via next_cursor_id within that chunk only. This bounds every
-    cursor session to a fraction of the total row count, so a transient error on
-    any single page only affects that chunk's retry budget — not the entire 2400-page
-    session seen in the original backfill path.
+    Used as the GAP-FILL source on the data-bank-first path: the range is normally
+    tiny (1-3 trailing days) and ``tickers`` is the breadth universe so each pull
+    is small.
+
+    Splits [date_from, date_to] (date_to defaults to today) into sequential chunks
+    of <= _SEP_CHUNK_DAYS calendar days. Each chunk issues a FRESH query
+    (date.gte=chunk_start, date.lte=chunk_end) and paginates via next_cursor_id
+    within that chunk only. This bounds every cursor session to a fraction of the
+    total row count, so a transient error on any single page only affects that
+    chunk's retry budget.
+
+    When ``tickers`` is given, the universe is split into batches of
+    _SEP_TICKER_BATCH and each batch is pulled with a comma-separated ``ticker``
+    filter (so the gap pull stays tiny), then concatenated.
 
     Per-request retry: httpx errors OR HTTP 5xx/429 → up to 3 retries with
     exponential backoff via _get_with_retry. HTTP 4xx (non-429) raises immediately.
-    Keeps existing dtype coercion + dropna + sort at the end.
     Returns a DataFrame with columns: ticker, date (str), closeadj (float).
     """
-    today = date_cls.today()
-    chunk_start = date_cls.fromisoformat(date_from)
-    all_pages: list[pd.DataFrame] = []
+    end = date_cls.fromisoformat(date_to) if date_to else date_cls.today()
 
-    while chunk_start <= today:
-        chunk_end = min(chunk_start + timedelta(days=_SEP_CHUNK_DAYS - 1), today)
+    frames: list[pd.DataFrame] = []
+    if tickers:
+        uniq = sorted({str(t) for t in tickers if t})
+        for i in range(0, len(uniq), _SEP_TICKER_BATCH):
+            batch = uniq[i : i + _SEP_TICKER_BATCH]
+            frames.append(
+                _fetch_sep_range(
+                    date_from=date_from, date_to=end, api_key=api_key, http=http,
+                    ticker_csv=",".join(batch),
+                )
+            )
+    else:
+        frames.append(
+            _fetch_sep_range(
+                date_from=date_from, date_to=end, api_key=api_key, http=http, ticker_csv=None,
+            )
+        )
 
-        # Fresh query for this chunk (new cursor session — bounded page count)
-        params: dict[str, Any] = {
-            "date.gte": chunk_start.isoformat(),
-            "date.lte": chunk_end.isoformat(),
-            "qopts.per_page": 10000,
-            "qopts.columns": "ticker,date,closeadj",
-            "api_key": api_key,
-        }
-
-        # Paginate within this chunk; each request has its own retry budget
-        while True:
-            resp = _get_with_retry(http, _NDL_SEP_URL, params=params, timeout=120.0)
-            payload = resp.json()
-            dt = payload.get("datatable", {})
-            cols = [c["name"] for c in dt.get("columns", [])]
-            rows = dt.get("data", [])
-            if rows:
-                all_pages.append(pd.DataFrame(rows, columns=cols))
-            cursor = (payload.get("meta") or {}).get("next_cursor_id")
-            if not cursor:
-                break
-            params = {"qopts.cursor_id": cursor, "api_key": api_key}
-
-        chunk_start = chunk_end + timedelta(days=1)
-
+    all_pages = [f for f in frames if f is not None and not f.empty]
     if not all_pages:
         return pd.DataFrame(columns=["ticker", "date", "closeadj"])
 
@@ -310,6 +450,58 @@ def _fetch_sep(*, date_from: str, api_key: str, http: httpx.Client) -> pd.DataFr
     df = df.dropna(subset=["closeadj"])
     df = df.sort_values(["ticker", "date"])
     return df[["ticker", "date", "closeadj"]]
+
+
+def _fetch_sep_range(
+    *,
+    date_from: str,
+    date_to: date_cls,
+    api_key: str,
+    http: httpx.Client,
+    ticker_csv: Optional[str],
+) -> pd.DataFrame:
+    """Pull one [date_from, date_to] range (optionally ticker-filtered) — chunked + paginated.
+
+    Returns the raw concatenated pages (columns: whatever NDL returns; the caller
+    coerces dtypes). Raises RuntimeError on a non-retryable HTTP error.
+    """
+    chunk_start = date_cls.fromisoformat(date_from)
+    pages: list[pd.DataFrame] = []
+
+    while chunk_start <= date_to:
+        chunk_end = min(chunk_start + timedelta(days=_SEP_CHUNK_DAYS - 1), date_to)
+
+        # Fresh query for this chunk (new cursor session — bounded page count)
+        params: dict[str, Any] = {
+            "date.gte": chunk_start.isoformat(),
+            "date.lte": chunk_end.isoformat(),
+            "qopts.per_page": 10000,
+            "qopts.columns": "ticker,date,closeadj",
+            "api_key": api_key,
+        }
+        if ticker_csv:
+            params["ticker"] = ticker_csv
+
+        # Paginate within this chunk; each request has its own retry budget.
+        # The cursor carries the filter context, so ticker= is only on the first page.
+        while True:
+            resp = _get_with_retry(http, _NDL_SEP_URL, params=params, timeout=120.0)
+            payload = resp.json()
+            dt = payload.get("datatable", {})
+            cols = [c["name"] for c in dt.get("columns", [])]
+            rows = dt.get("data", [])
+            if rows:
+                pages.append(pd.DataFrame(rows, columns=cols))
+            cursor = (payload.get("meta") or {}).get("next_cursor_id")
+            if not cursor:
+                break
+            params = {"qopts.cursor_id": cursor, "api_key": api_key}
+
+        chunk_start = chunk_end + timedelta(days=1)
+
+    if not pages:
+        return pd.DataFrame(columns=["ticker", "date", "closeadj"])
+    return pd.concat(pages, ignore_index=True)
 
 
 # -----------------------------------------------------------------------
@@ -525,6 +717,17 @@ def _update_cache(key: str, new_series: pd.Series) -> None:
     for date_str, val in new_series.items():
         if pd.notna(val):
             existing[str(date_str)] = float(val)
+
+    # HOLIDAY-PRUNE: the published % series must contain ONLY NYSE trading days.
+    # Drop any cached date that is not an NYSE session — legacy/holiday rows (e.g.
+    # the old seed's 100.0 spikes on 2026-04-03 / 05-25 / 06-19) must never survive.
+    # The trading-day set comes from the data-bank calendar; if the catalog is absent
+    # nyse_trading_days returns empty → we SKIP the prune (never drop rows on a
+    # machine without the data bank).
+    if existing:
+        trading_days = databank.nyse_trading_days(min(existing), max(existing))
+        if trading_days:
+            existing = {d: v for d, v in existing.items() if d in trading_days}
 
     # Write sorted
     sorted_items = sorted(existing.items())

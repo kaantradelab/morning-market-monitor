@@ -240,13 +240,13 @@ tiles:
     source: sharadar:sp500_above_200dma
     transform: first_diff
     front_screen: true
-    note: "% of S&P 500 members with closeadj > SMA200 (Sharadar SEP, cloud-computed)"
+    note: "% of S&P 500 members with closeadj > SMA200 (Sharadar SEP, data-bank-computed)"
   - key: breadth_50dma
     axis: 10
     label: "% S&P >50DMA"
     source: sharadar:sp500_above_50dma
     transform: first_diff
-    note: "% of S&P 500 members with closeadj > SMA50 (Sharadar SEP, cloud-computed)"
+    note: "% of S&P 500 members with closeadj > SMA50 (Sharadar SEP, data-bank-computed)"
   - key: breadth_broad_200dma
     axis: 10
     label: "% broad-US >200DMA"
@@ -440,6 +440,16 @@ calendar:
     - "2026-10-28"
     - "2026-12-09"
 
+  # OPTIONAL override of the built-in ET release-time map (calendar.py
+  # _ET_RELEASE_TIMES). Keys = lowercase substrings matched against the event
+  # title; values = US-Eastern WALL-CLOCK 'HH:MM'. Entries here are checked
+  # BEFORE the code defaults (resolution stops on first substring match), so use
+  # them to add/correct a release time without touching code. The ET time is
+  # resolved to UTC DST-aware (EDT/EST by release date) then Istanbul = UTC+3,
+  # rendered as "HH:MM UTC · HH:MM İst". Unmatched titles keep no time (—).
+  # Leave empty to use the built-in defaults (08:30 / 10:00 / 13:00 / 14:00 ET).
+  release_times: {}
+
 # --------------------------------------------------------------------------
 # QUARANTINE — intraday gauges: regime-label only, NEVER a same-morning trigger
 # --------------------------------------------------------------------------
@@ -449,8 +459,14 @@ quarantine_intraday:
   - intraday_repo
 
 # --------------------------------------------------------------------------
-# BREADTH (SPEC-3) — Sharadar SEP cloud computation config
+# BREADTH (SPEC-3) — Sharadar SEP breadth config (Mac-local, data-bank-first)
 # --------------------------------------------------------------------------
+# Price source = the LOCAL trading data bank (~/data/tradingbank), READ-ONLY. The
+# NDL key (NASDAQ_DATA_LINK_API_KEY) is OPTIONAL and used ONLY to gap-fill the
+# latest missing day(s) when the data bank lags the last trading day (mid-ingest /
+# today before 08:00). Read from the environment (export it in ~/.zshenv so the
+# launchd job inherits it). Missing key / missing bank → the breadth tiles degrade
+# gracefully (stale/missing), the run never crashes. NEVER a full-universe NDL pull.
 breadth:
   # Broad-US universe filters (applied to SHARADAR/TICKERS metadata)
   broad_universe:

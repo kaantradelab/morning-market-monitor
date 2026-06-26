@@ -21,8 +21,9 @@ high_impact via config.calendar.high_impact_events or the provider impact field.
 
 from __future__ import annotations
 
-from datetime import date as date_cls, timedelta
+from datetime import date as date_cls, datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -30,6 +31,54 @@ from ..config import Config
 from ..models import CalendarEvent
 
 _FRED_RELEASES_BASE = "https://api.stlouisfed.org/fred"
+
+# US macro releases land at fixed US-Eastern WALL-CLOCK times. We resolve that ET
+# wall-clock to UTC DST-aware (ZoneInfo on the event's release DATE: summer EDT=
+# UTC-4, winter EST=UTC-5), then Istanbul = UTC + 3 (no DST). Keys are lowercase
+# substrings matched against the event/release title; the list is ordered MOST-
+# SPECIFIC FIRST so e.g. "consumer confidence" (10:00) is not shadowed by
+# "consumer price" (08:30). A title matching nothing keeps time=None (no guess).
+_NY_TZ = ZoneInfo("America/New_York")
+
+_ET_RELEASE_TIMES: list[tuple[str, tuple[int, int]]] = [
+    # --- 08:30 ET ---
+    ("consumer price", (8, 30)),                # CPI
+    ("cpi", (8, 30)),
+    ("employment situation", (8, 30)),          # NFP
+    ("nonfarm", (8, 30)),
+    ("nfp", (8, 30)),
+    ("payroll", (8, 30)),
+    ("gross domestic product", (8, 30)),        # GDP
+    ("gdp", (8, 30)),
+    ("personal income", (8, 30)),               # Personal Income & Outlays (PCE)
+    ("pce", (8, 30)),
+    ("producer price", (8, 30)),                # PPI
+    ("ppi", (8, 30)),
+    ("retail sales", (8, 30)),
+    ("jobless claims", (8, 30)),                # Initial / Continuing Claims
+    ("durable goods", (8, 30)),
+    ("international trade", (8, 30)),            # Trade Balance
+    ("trade balance", (8, 30)),
+    # --- 10:00 ET ---
+    ("jolts", (10, 0)),
+    ("job openings", (10, 0)),
+    ("ism", (10, 0)),                           # ISM Mfg / Services / PMI
+    ("pmi", (10, 0)),
+    ("surveys of consumers", (10, 0)),          # UMich sentiment
+    ("umich", (10, 0)),
+    ("consumer sentiment", (10, 0)),
+    ("consumer confidence", (10, 0)),
+    ("factory orders", (10, 0)),
+    ("home sales", (10, 0)),                    # New / Existing Home Sales
+    ("construction spending", (10, 0)),
+    ("wholesale inventories", (10, 0)),
+    # --- 13:00 ET — Treasury auctions (10Y/30Y note/bond) ---
+    ("auction", (13, 0)),
+    ("treasury note", (13, 0)),
+    ("treasury bond", (13, 0)),
+    # --- 14:00 ET — FOMC statement ---
+    ("fomc", (14, 0)),
+]
 
 # Cross-asset transmission-power ranking (reference section 3). Lower rank = stronger.
 # Keys are lowercase substrings matched against the event title.
@@ -170,6 +219,9 @@ def _fetch_fred(
     to_date = from_date + timedelta(days=6)
     date_from = from_date.isoformat()
 
+    # Effective ET release-time map (config overrides + code defaults).
+    release_times = _build_release_times(cal_cfg)
+
     events: list[CalendarEvent] = []
 
     # FRED release/dates — one call PER configured release_id (SPEC-3 §10)
@@ -221,7 +273,7 @@ def _fetch_fred(
                 hi = any(kw in title_low for kw in high_impact_events) or (rank is not None and rank <= 3)
                 events.append(CalendarEvent(
                     event=title,
-                    time=None,
+                    time=_resolve_event_time(title, rd_date, release_times),
                     consensus=None,
                     high_impact=hi,
                     prior_citi_surprise=None,
@@ -238,7 +290,8 @@ def _fetch_fred(
         if from_date <= fd_date <= to_date:
             events.append(CalendarEvent(
                 event="FOMC Meeting (Statement)",
-                time="~14:00 ET",
+                # 14:00 ET statement, resolved DST-aware on the meeting date.
+                time=_resolve_event_time("FOMC", fd_date, release_times),
                 consensus=None,
                 high_impact=True,
                 prior_citi_surprise=None,
@@ -424,6 +477,59 @@ def _rank_for(title: str) -> Optional[int]:
     for needle, rank in _TRANSMISSION_RANK:
         if needle in low:
             return rank
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Release-time resolution (ET wall-clock -> UTC DST-aware -> Istanbul UTC+3)
+# ---------------------------------------------------------------------------
+def _parse_hhmm(value) -> Optional[tuple[int, int]]:
+    """Parse a 'HH:MM' string into (hour, minute); None if malformed/out-of-range."""
+    try:
+        h_str, m_str = str(value).strip().split(":")
+        h, m = int(h_str), int(m_str)
+    except (ValueError, AttributeError):
+        return None
+    if 0 <= h < 24 and 0 <= m < 60:
+        return (h, m)
+    return None
+
+
+def _build_release_times(cal_cfg: dict) -> list[tuple[str, tuple[int, int]]]:
+    """Effective ET release-time map: config calendar.release_times overrides FIRST
+    (checked before the code defaults, since resolution stops on first match), then
+    the built-in _ET_RELEASE_TIMES defaults. config.release_times is an optional
+    mapping {title-substring: 'HH:MM' (ET wall-clock)}."""
+    overrides: list[tuple[str, tuple[int, int]]] = []
+    rt = cal_cfg.get("release_times")
+    if isinstance(rt, dict):
+        for key, val in rt.items():
+            hm = _parse_hhmm(val)
+            if hm is not None:
+                overrides.append((str(key).strip().lower(), hm))
+    return overrides + _ET_RELEASE_TIMES
+
+
+def _format_et_time(event_date: date_cls, hour: int, minute: int) -> str:
+    """ET wall-clock (hour:minute) on event_date -> 'HH:MM UTC · HH:MM İst'.
+
+    DST-aware: ZoneInfo('America/New_York') resolves EDT (UTC-4, summer) vs EST
+    (UTC-5, winter) from the release DATE. Istanbul = UTC + 3 (no DST)."""
+    et_dt = datetime(event_date.year, event_date.month, event_date.day, hour, minute, tzinfo=_NY_TZ)
+    utc_dt = et_dt.astimezone(timezone.utc)
+    ist_dt = utc_dt + timedelta(hours=3)
+    return f"{utc_dt:%H:%M} UTC · {ist_dt:%H:%M} İst"
+
+
+def _resolve_event_time(
+    title: str, event_date: date_cls, release_times: list[tuple[str, tuple[int, int]]]
+) -> Optional[str]:
+    """Resolve an event's display time string from its title substring + release
+    date. Unmatched title -> None (do not guess a time)."""
+    low = title.lower()
+    for needle, (hour, minute) in release_times:
+        if needle in low:
+            return _format_et_time(event_date, hour, minute)
     return None
 
 

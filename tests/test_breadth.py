@@ -119,6 +119,69 @@ def _make_config(ndl_key: str = "test-ndl-key", fred_key: str = "test-fred-key")
 
 
 # ---------------------------------------------------------------------------
+# Data-bank-first helpers (hermetic: mock the LOCAL data bank, no real I/O)
+# ---------------------------------------------------------------------------
+from contextlib import contextmanager  # noqa: E402
+
+
+def _synthetic_window(
+    tickers: list[str],
+    *,
+    n_days: int = 260,
+    last_date: str = "2026-06-25",
+    base: float = 100.0,
+    ramp: float = 1.0,
+) -> pd.DataFrame:
+    """A rising-price closeadj window over `n_days` business days for `tickers`.
+
+    Rising prices → today's close > its trailing SMA → a non-degenerate (100%)
+    breadth series, enough to drive _compute_pct_series past the warmup. Columns
+    match databank.read_sep_window: ticker, date (str 'YYYY-MM-DD'), closeadj.
+    """
+    import datetime
+
+    end = datetime.date.fromisoformat(last_date)
+    dates = pd.bdate_range(end=end, periods=n_days)
+    rows = []
+    for ti, t in enumerate(tickers):
+        for i, d in enumerate(dates):
+            rows.append(
+                {"ticker": t, "date": d.date().isoformat(), "closeadj": base + ti * 5 + i * ramp}
+            )
+    return pd.DataFrame(rows)
+
+
+@contextmanager
+def _databank_mock(
+    *,
+    df: pd.DataFrame,
+    complete: bool,
+    last_td: str = "2026-06-26",
+    db_max: str | None = "2026-06-25",
+    broad: set[str] | None = None,
+    sp500: set[str] | None = None,
+    read_side_effect=None,
+):
+    """Patch every databank entry point used by _ensure_session.
+
+    `df` is what read_sep_window returns (unless `read_side_effect` is given).
+    `broad`/`sp500` default to the df's tickers so every key has a universe.
+    """
+    universe = set(df["ticker"].unique()) if not df.empty else set()
+    broad = broad if broad is not None else universe
+    sp500 = sp500 if sp500 is not None else universe
+    rsw_kw = {"side_effect": read_side_effect} if read_side_effect is not None else {"return_value": df}
+    with patch.object(breadth_mod.databank, "read_sep_window", **rsw_kw) as rsw, \
+         patch.object(breadth_mod.databank, "last_completed_session", return_value=last_td), \
+         patch.object(breadth_mod.databank, "last_trading_day", return_value=last_td), \
+         patch.object(breadth_mod.databank, "databank_sep_complete", return_value=complete), \
+         patch.object(breadth_mod.databank, "databank_max_sep_date", return_value=db_max), \
+         patch.object(breadth_mod.databank, "broad_universe", return_value=broad), \
+         patch.object(breadth_mod, "_load_sp500_cache", return_value=sp500):
+        yield rsw
+
+
+# ---------------------------------------------------------------------------
 # 1. Broad-US universe filter
 # ---------------------------------------------------------------------------
 class TestBroadUniverseFilter:
@@ -539,74 +602,48 @@ class TestPagination:
         with pytest.raises(RuntimeError):
             _fetch_sep(date_from="2024-01-01", api_key="key", http=http)
 
-        # ... and the public entry point degrades (ok=False), does NOT raise.
+        # ... and on the data-bank-first path a gap-fill mid-pagination failure is
+        # GRACEFUL: the public entry point still computes from the data-bank
+        # history (ok=True), never raises. (Old contract: ok=False — superseded.)
         http2 = _make_mock_http([
             {"status_code": 200, "json": page1},
             {"status_code": 403, "json": {}},
         ])
         cfg = _make_config()
-        series = fetch_breadth_series(
-            "broad_above_200dma", config=cfg, http=http2, session={}
-        )
+        df = _synthetic_window(["AAA", "BBB"], n_days=260)
+        with _databank_mock(df=df, complete=False, db_max="2026-06-25", last_td="2026-06-26"):
+            with patch("morning_monitor.sources.breadth.time.sleep"):
+                series = fetch_breadth_series(
+                    "broad_above_200dma", config=cfg, http=http2, session={}
+                )
         assert isinstance(series, RawSeries)
-        assert series.ok is False
+        assert series.ok is True, "gap-fill failure must degrade gracefully to data-bank history"
 
-    def test_single_sep_pull_shared_across_tiles(self):
-        """All 5 breadth tiles share ONE SEP pull per run via the session dict.
+    def test_single_databank_read_shared_across_tiles(self):
+        """All 5 breadth tiles share ONE data-bank read per run via the session dict.
 
-        _BACKFILL_CALENDAR_DAYS is patched to 90 (< _SEP_CHUNK_DAYS=180) so
-        the pull fits in a single chunk and a single mock response suffices.
-        The key invariant under test is session memoization: subsequent
-        _ensure_session calls for different tiles must add ZERO new HTTP requests.
+        The key invariant is session memoization: _ensure_session reads the data
+        bank exactly once; subsequent calls for other tiles add ZERO new reads.
         """
-        # Single page of minimal SEP data
-        rows = [["AAPL", "2024-01-02", 180.0]]
-        sep_page = _make_ndl_sep_page(rows)
-        # Tickers page
-        ticker_rows = [["AAPL", "NASDAQ", "N", "Domestic Common Stock"]]
-        tickers_page = _make_ndl_tickers_page(ticker_rows)
-        # Wiki HTML
-        wiki_html = _make_wiki_html(["AAPL"])
-
-        responses = [
-            {"status_code": 200, "json": sep_page},      # SEP pull (1 chunk)
-            {"status_code": 200, "json": tickers_page},   # TICKERS pull
-            {"status_code": 200, "text": wiki_html},      # Wikipedia
-        ]
-        http = _make_mock_http(responses)
-
         cfg = _make_config()
+        http = MagicMock()
         session: dict = {}
+        df = _synthetic_window(["AAA", "BBB"], n_days=60, last_date="2026-06-26")
 
-        # Patch backfill window to 90 days — fits in one chunk, avoids the
-        # need for many mock responses to cover a 1600-day chunked pull.
-        with patch.object(breadth_mod, "_BACKFILL_CALENDAR_DAYS", 90):
-            # Call _ensure_session (which triggers the SEP pull)
-            from morning_monitor.sources.breadth import _ensure_session
+        from morning_monitor.sources.breadth import _ensure_session
+        with _databank_mock(df=df, complete=True, last_td="2026-06-26", db_max="2026-06-26") as rsw:
             _ensure_session("sp500_above_200dma", config=cfg, http=http, session=session)
-            calls_after_first = http.get.call_count
-
-            # Call again for two more tiles — memoization must make ZERO new HTTP calls
-            # (one SEP pull per run, shared across all 5 tiles). A regression that
-            # re-pulls per tile would bump call_count here.
+            reads_after_first = rsw.call_count
+            # Two more tiles — memoization must add ZERO new data-bank reads.
             _ensure_session("sp500_above_50dma", config=cfg, http=http, session=session)
             _ensure_session("broad_above_200dma", config=cfg, http=http, session=session)
 
         assert "sep_initialized" in session
         assert "sep_df" in session
-        assert http.get.call_count == calls_after_first, (
-            "Subsequent _ensure_session calls must make NO new HTTP requests "
-            "(SEP/TICKERS/Wikipedia are pulled exactly once per run)"
-        )
-        # SEP was fetched during the initial _ensure_session; subsequent tiles add nothing.
-        sep_calls = [
-            c for c in http.get.call_args_list
-            if c.args and "SEP.json" in str(c.args[0])
-        ]
-        assert len(sep_calls) >= 1, "SEP must be pulled at least once per run"
-        assert http.get.call_count == calls_after_first, (
-            "No new SEP calls after session is warmed (memoization)"
-        )
+        assert reads_after_first == 1, "data bank must be read exactly once on first tile"
+        assert rsw.call_count == 1, "subsequent tiles must reuse the shared read (no re-read)"
+        # Data bank complete → never touched NDL.
+        http.get.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -623,7 +660,12 @@ class TestCacheManagement:
 
     def test_backfill_writes_756_plus_points(self, tmp_path):
         """First run: write ≥756 points to the cache."""
-        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
+        # Skip the NYSE holiday-prune here: these fixtures use synthetic
+        # consecutive-calendar-day dates (not real sessions), so the prune is
+        # orthogonal to the cache-merge mechanics under test. (Holiday-prune has
+        # its own dedicated test below.)
+        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path), \
+             patch.object(breadth_mod.databank, "nyse_trading_days", return_value=set()):
             series = self._make_series(800)
             _update_cache("breadth_200dma", series)
             rows = _count_cache_rows("breadth_200dma")
@@ -631,7 +673,8 @@ class TestCacheManagement:
 
     def test_incremental_appends_new_day(self, tmp_path):
         """Incremental run: append a new day without losing history."""
-        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
+        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path), \
+             patch.object(breadth_mod.databank, "nyse_trading_days", return_value=set()):
             # Initial write
             initial = self._make_series(100, "2024-01-01")
             _update_cache("breadth_50dma", initial)
@@ -646,7 +689,8 @@ class TestCacheManagement:
 
     def test_idempotent_rerun_overwrites_same_date(self, tmp_path):
         """Re-computing the same date overwrites the existing value (idempotent)."""
-        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
+        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path), \
+             patch.object(breadth_mod.databank, "nyse_trading_days", return_value=set()):
             initial = pd.Series([55.0], index=["2024-06-01"])
             _update_cache("breadth_broad_200dma", initial)
 
@@ -663,7 +707,8 @@ class TestCacheManagement:
 
     def test_cache_csv_is_sorted_by_date(self, tmp_path):
         """Cache file must be sorted oldest → newest for the anomaly engine."""
-        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
+        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path), \
+             patch.object(breadth_mod.databank, "nyse_trading_days", return_value=set()):
             # Write in non-sorted order
             series = pd.Series(
                 [10.0, 30.0, 20.0],
@@ -674,6 +719,39 @@ class TestCacheManagement:
 
         dates = [h.date for h in history]
         assert dates == sorted(dates), "Cache must be sorted ascending by date"
+
+    def test_holiday_prune_drops_non_trading_days(self, tmp_path):
+        """_update_cache drops any cached date that is not an NYSE trading day.
+
+        Legacy/holiday rows (e.g. the old seed's 100.0 spikes on 2026-06-19
+        Juneteenth) must NOT survive in the published % series. The NYSE trading-day
+        set is mocked: only the two real sessions are 'open' here, so the holiday
+        row is pruned while the sessions remain.
+        """
+        sessions = {"2026-06-18", "2026-06-22"}  # holiday 2026-06-19 deliberately absent
+        series = pd.Series(
+            [55.0, 100.0, 56.0],
+            index=["2026-06-18", "2026-06-19", "2026-06-22"],  # 06-19 = Juneteenth (closed)
+        )
+        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path), \
+             patch.object(breadth_mod.databank, "nyse_trading_days", return_value=sessions):
+            _update_cache("breadth_broad_200dma", series)
+            history = _load_cache("breadth_broad_200dma")
+
+        dates = {h.date for h in history}
+        assert "2026-06-19" not in dates, "non-trading day (holiday) must be pruned"
+        assert dates == sessions, "only NYSE sessions survive in the published series"
+        assert all(h.value != 100.0 for h in history), "the holiday 100.0 spike must be gone"
+
+    def test_holiday_prune_skipped_when_catalog_absent(self, tmp_path):
+        """Graceful: empty trading-day set (no catalog) → SKIP prune, drop nothing."""
+        series = pd.Series([55.0, 100.0], index=["2026-06-18", "2026-06-19"])
+        with patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path), \
+             patch.object(breadth_mod.databank, "nyse_trading_days", return_value=set()):
+            _update_cache("breadth_broad_200dma", series)
+            history = _load_cache("breadth_broad_200dma")
+        dates = {h.date for h in history}
+        assert dates == {"2026-06-18", "2026-06-19"}, "no catalog → no rows dropped"
 
 
 # ---------------------------------------------------------------------------
@@ -724,92 +802,54 @@ class TestLicenseGuard:
 # 8. Graceful degradation paths
 # ---------------------------------------------------------------------------
 class TestGracefulDegradation:
-    """NDL 403, Wikipedia 500 → degraded RawSeries (ok=False); run continues."""
+    """Data-bank-first failure modes: data-bank read failure degrades; missing S&P
+    cache degrades only S&P tiles; the run never raises."""
 
-    def test_ndl_403_returns_degraded_series(self, tmp_path):
-        """HTTP 403 from NDL → degraded breadth tiles, not an exception."""
-        http = MagicMock()
-        resp = MagicMock()
-        resp.status_code = 403
-        http.get.return_value = resp
+    def test_databank_read_failure_degrades(self, tmp_path):
+        """read_sep_window raising → degraded breadth tile (ok=False), no exception.
 
-        cfg = _make_config()
-        session: dict = {}
-
-        result = fetch_breadth_series(
-            "sp500_above_200dma",
-            config=cfg,
-            http=http,
-            session=session,
-        )
-        assert result.ok is False
-        assert result.error is not None
-        assert "403" in result.error or result.error  # some degraded reason
-
-    def test_missing_ndl_key_returns_degraded(self):
-        """No NDL key → degraded with clear message, no exception raised."""
-        cfg = MagicMock()
-        cfg.nasdaq_data_link_api_key.return_value = None
-        session: dict = {}
-        http = MagicMock()
-
-        result = fetch_breadth_series(
-            "broad_above_200dma",
-            config=cfg,
-            http=http,
-            session=session,
-        )
-        assert result.ok is False
-        assert result.error is not None
-
-    def test_wikipedia_failure_degrades_sp500_tiles_not_broad(self, tmp_path):
-        """Wikipedia failure → S&P tiles degrade; broad tiles unaffected (need no list).
-
-        _BACKFILL_CALENDAR_DAYS patched to 90 so the SEP pull fits in a single
-        chunk and a single mock response suffices (avoids many chunk queries
-        consuming the TICKERS/Wikipedia mock responses prematurely).
+        With the data bank complete (no gap-fill), an empty/failed read leaves no
+        SEP frame → degraded. (Replaces the old NDL-403 degradation contract.)
         """
-        # Wikipedia fails
-        wiki_resp = MagicMock()
-        wiki_resp.status_code = 503
-        wiki_resp.text = ""
-
-        # TICKERS succeeds
-        ticker_rows = [["AAPL", "NASDAQ", "N", "Domestic Common Stock"]]
-        tickers_page = _make_ndl_tickers_page(ticker_rows)
-
-        # SEP data: single page (no cursor)
-        sep_rows = [["AAPL", "2024-01-02", 180.0]] * 5
-        sep_page = _make_ndl_sep_page(sep_rows)
-
-        http = MagicMock()
-        # First call = SEP (1 chunk), second = TICKERS, third = Wikipedia
-        http.get.side_effect = [
-            MagicMock(status_code=200, json=lambda: sep_page),  # SEP
-            MagicMock(status_code=200, json=lambda: tickers_page, text=""),  # TICKERS
-            wiki_resp,  # Wikipedia — fails
-        ]
-
         cfg = _make_config()
         session: dict = {}
+        http = MagicMock()
+        df_empty = pd.DataFrame(columns=["ticker", "date", "closeadj"])
+        with _databank_mock(
+            df=df_empty, complete=True, broad={"AAPL"}, sp500={"AAPL"},
+            read_side_effect=RuntimeError("duckdb read failed"),
+        ), patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
+            result = fetch_breadth_series(
+                "sp500_above_200dma", config=cfg, http=http, session=session
+            )
+        assert result.ok is False
+        assert result.error is not None
+        # No NDL call attempted: the data bank was 'complete' (no gap).
+        http.get.assert_not_called()
 
-        with patch.object(breadth_mod, "_BACKFILL_CALENDAR_DAYS", 90), \
-             patch.object(breadth_mod, "_SP500_CACHE_PATH", tmp_path / "no_cache.csv"), \
-             patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
+    def test_missing_sp500_cache_degrades_only_sp500(self, tmp_path):
+        """Missing S&P cache → S&P tiles degrade; broad tiles still compute.
+
+        Broad needs no S&P list (it uses the data-bank broad universe), so a
+        missing sp500.csv must not take broad breadth down with it.
+        """
+        cfg = _make_config()
+        session: dict = {}
+        http = MagicMock()
+        df = _synthetic_window(["AAA", "BBB", "CCC"], n_days=260)
+        with _databank_mock(
+            df=df, complete=True, broad={"AAA", "BBB", "CCC"}, sp500=set(),
+        ), patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
             result_sp500 = fetch_breadth_series(
                 "sp500_above_200dma", config=cfg, http=http, session=session
             )
-            # Broad result from same session
             result_broad = fetch_breadth_series(
                 "broad_above_200dma", config=cfg, http=http, session=session
             )
-
-        # S&P breadth should degrade (no universe list — Wikipedia returned 503)
-        assert result_sp500.ok is False
-        # Broad might also fail here since we have very little data (1 ticker, 5 rows),
-        # but it should NOT fail due to Wikipedia — it uses broad_tickers instead
-        # Just verify it's a RawSeries (not an exception)
-        assert isinstance(result_broad, RawSeries)
+        assert result_sp500.ok is False, "no S&P universe → S&P tile degrades"
+        assert result_broad.ok is True, "broad tile must still compute (no S&P list needed)"
+        # Data bank complete → no NDL call for either tile.
+        http.get.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -890,11 +930,12 @@ class TestRetryPolicy:
             f"Expected {len(_SEP_RETRY_DELAYS) + 1} attempts, got {http.get.call_count}"
         )
 
-    def test_retries_exhausted_fetch_breadth_series_degrades_not_raises(self):
-        """Exhausted retries → _fetch_sep raises → fetch_breadth_series returns ok=False.
+    def test_retries_exhausted_gap_fill_degrades_gracefully_not_fails(self, tmp_path):
+        """Exhausted gap-fill retries → compute from the data-bank history (ok=True).
 
-        Confirms the never-raise contract: fetch_breadth_series catches the
-        RuntimeError from _fetch_sep and returns a degraded RawSeries.
+        On the data-bank-first path, NDL is only the gap-fill tail. If it 503s out,
+        the run must still produce breadth from the LOCAL data-bank window — never
+        a degraded tile. (Old contract: ok=False — superseded.)
         """
         err_resp = MagicMock()
         err_resp.status_code = 503
@@ -902,14 +943,108 @@ class TestRetryPolicy:
         http.get.return_value = err_resp
 
         cfg = _make_config()
-        with patch("morning_monitor.sources.breadth.time.sleep"):
+        df = _synthetic_window(["AAA", "BBB"], n_days=260)
+        with _databank_mock(df=df, complete=False, db_max="2026-06-25", last_td="2026-06-26"), \
+             patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path), \
+             patch("morning_monitor.sources.breadth.time.sleep"):
             result = fetch_breadth_series(
                 "sp500_above_200dma", config=cfg, http=http, session={}
             )
 
         assert isinstance(result, RawSeries)
-        assert result.ok is False
-        assert result.error is not None and len(result.error) > 0
+        assert result.ok is True, "gap-fill exhaustion must fall back to data-bank history"
+
+
+# ---------------------------------------------------------------------------
+# 14. Gap-fill branch — data-bank-first freshness logic
+# ---------------------------------------------------------------------------
+class TestGapFill:
+    """data bank covers last_td → no NDL; missing tail → NDL only for the gap; no key → graceful."""
+
+    def test_databank_complete_no_ndl_call(self, tmp_path):
+        """Data bank already covers last_td → compute locally, ZERO NDL calls."""
+        cfg = _make_config()
+        http = MagicMock()
+        df = _synthetic_window(["AAA", "BBB", "CCC"], n_days=260, last_date="2026-06-26")
+        with _databank_mock(df=df, complete=True, last_td="2026-06-26", db_max="2026-06-26"), \
+             patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
+            result = fetch_breadth_series(
+                "broad_above_200dma", config=cfg, http=http, session={}
+            )
+        assert result.ok is True
+        http.get.assert_not_called()
+
+    def test_gap_present_ndl_called_only_for_the_gap(self, tmp_path):
+        """Data bank lags by one day → NDL pulled ONLY for (db_max, last_td]."""
+        cfg = _make_config()
+        # NDL returns the single missing day for the universe.
+        gap_page = _make_ndl_sep_page(
+            [["AAA", "2026-06-26", 999.0], ["BBB", "2026-06-26", 999.0]], cursor=None
+        )
+        http = _make_mock_http([{"status_code": 200, "json": gap_page}])
+        df = _synthetic_window(["AAA", "BBB"], n_days=260, last_date="2026-06-25")
+        with _databank_mock(
+            df=df, complete=False, db_max="2026-06-25", last_td="2026-06-26",
+            broad={"AAA", "BBB"}, sp500={"AAA", "BBB"},
+        ), patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path), \
+             patch("morning_monitor.sources.breadth.time.sleep"):
+            result = fetch_breadth_series(
+                "broad_above_200dma", config=cfg, http=http, session={}
+            )
+        assert result.ok is True
+        # Exactly one NDL call, and its date.gte is the day AFTER db_max (the gap start).
+        assert http.get.call_count == 1, "gap pull must be a single tiny request"
+        params = http.get.call_args_list[0].kwargs.get("params") or {}
+        assert params.get("date.gte") == "2026-06-26", "gap must start the day after db_max"
+        assert params.get("date.lte") == "2026-06-26", "gap must end at last_td"
+        # Ticker-filtered (tiny pull), not a full-universe backfill.
+        assert "ticker" in params and params["ticker"]
+
+    def test_empty_universe_never_full_reads_or_pulls(self, tmp_path):
+        """FOOTGUN GUARD: both universes empty must NOT trigger a full-universe read
+        (tickers=None) nor a full-universe NDL gap-fill — even with a key + a gap.
+
+        This is the 24M-row / OOM disaster the data-bank-first arch exists to avoid.
+        """
+        cfg = _make_config()  # has an NDL key
+        http = MagicMock()
+        captured: dict = {}
+
+        def _spy_read(date_from, date_to, tickers=None):
+            captured["tickers"] = tickers
+            return pd.DataFrame(columns=["ticker", "date", "closeadj"])
+
+        with patch.object(breadth_mod.databank, "read_sep_window", side_effect=_spy_read), \
+             patch.object(breadth_mod.databank, "last_trading_day", return_value="2026-06-26"), \
+             patch.object(breadth_mod.databank, "databank_sep_complete", return_value=False), \
+             patch.object(breadth_mod.databank, "databank_max_sep_date", return_value="2026-06-25"), \
+             patch.object(breadth_mod.databank, "broad_universe", return_value=set()), \
+             patch.object(breadth_mod, "_load_sp500_cache", return_value=set()), \
+             patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
+            result = fetch_breadth_series(
+                "broad_above_200dma", config=cfg, http=http, session={}
+            )
+
+        assert captured.get("tickers") is not None, "read must be ticker-bounded, never None"
+        assert captured["tickers"] == set(), "empty universe → bounded empty set (short-circuits)"
+        http.get.assert_not_called()  # gap-fill skipped despite key + gap
+        assert result.ok is False  # no universe → graceful degrade
+
+    def test_no_ndl_key_graceful(self, tmp_path):
+        """Gap present but no NDL key → compute from data-bank history; ZERO NDL calls."""
+        cfg = _make_config(ndl_key=None)  # no key
+        http = MagicMock()
+        df = _synthetic_window(["AAA", "BBB"], n_days=260, last_date="2026-06-25")
+        session: dict = {}
+        with _databank_mock(
+            df=df, complete=False, db_max="2026-06-25", last_td="2026-06-26",
+        ), patch.object(breadth_mod, "_BREADTH_CACHE_DIR", tmp_path):
+            result = fetch_breadth_series(
+                "broad_above_200dma", config=cfg, http=http, session=session
+            )
+        assert result.ok is True
+        http.get.assert_not_called()
+        assert "gap_fill_note" in session and "no NDL key" in session["gap_fill_note"]
 
     def test_4xx_non_429_raises_immediately_no_retry(self):
         """HTTP 4xx (non-429) must raise immediately — no retries, no sleep."""

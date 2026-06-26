@@ -55,6 +55,21 @@ Both specs draw from that reference; read §1 (tiles), §2 (anomaly), §4 (blind
 gauges (MOVE, CDX, cross-currency basis, dealer-gamma) ship as **free proxies** unless Kaan confirms a licensed
 (Bloomberg/ICE) feed — then those 4 upgrade to the real series.
 
+## Running (Mac-local)
+
+The backend (SPEC-2) runs **entirely on Kaan's Mac** — no cloud, no GitHub Actions,
+no Pages. The trading data bank (`~/data/tradingbank`) supplies EOD prices; the
+monitor computes the brief, renders a static site to `./site/`, and opens it.
+
+- **On demand:** double-click `scripts/compute.command` ("Calculate"). It runs the
+  pipeline and opens `site/index.html`.
+- **Automatic:** `deploy/com.morningmonitor.daily.plist` (launchd) runs the same
+  payload at 08:15 local, just after the data bank's 08:00 ingest.
+- **Browse history:** `site/archive/index.html` lists every past day.
+
+Full setup + install steps: **[DEPLOY-LOCAL.md](DEPLOY-LOCAL.md)**. The old cloud
+flow (`DEPLOY.md`, `.github/workflows/morning.yml`) is kept **dormant** for reversibility.
+
 ## Owner
 
 Discover/spec: Cin. Build: Pine (SPEC-1) + Usta (SPEC-2). Handoffs gated on Kaan greenlight.

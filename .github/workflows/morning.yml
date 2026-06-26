@@ -1,5 +1,22 @@
 name: morning-brief
 
+# ============================================================================
+# DORMANT — DISABLED. The live architecture is Mac-local (single layer).
+#
+# The brief now runs LOCALLY on Kaan's Mac: the trading data bank ingests EOD
+# prices each morning, then launchd (deploy/com.morningmonitor.daily.plist) or a
+# double-click on scripts/compute.command runs `python -m morning_monitor.main`,
+# renders ./site/ and opens it in the browser. No GitHub Actions pull, no Pages
+# deploy, no cloud. See DEPLOY-LOCAL.md.
+#
+# This file is kept (NOT deleted) so the cloud path stays reversible. It is
+# already disabled on GitHub (Actions/Pages off). Do NOT re-enable by re-adding
+# the schedule on github.com alone — the cron self-fetches the full universe from
+# NDL (the very full-universe pull the Mac-local design replaced) and needs a real
+# cloud env (secrets + a license-clean published-derived-only invariant) before it
+# is sound again. Re-enable only deliberately, not by accident.
+# ============================================================================
+#
 # Runs once a morning + on-demand.
 #
 #   cron "7 5 * * *" UTC = 08:07 Istanbul (Turkey is permanently UTC+3, no DST).
@@ -42,6 +59,13 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    # DORMANT GUARD: this job is hard-disabled at the repo level so that a future
+    # accidental Actions re-enable (the schedule/dispatch above) can NEVER fire the
+    # cloud cron. The Mac-local arch is the live path; re-enabling the cloud build
+    # is a deliberate act (flip this to true AND restore the license-clean
+    # published-derived-only invariant — see the header). Everything else is kept
+    # intact so the cloud path stays fully reversible.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages

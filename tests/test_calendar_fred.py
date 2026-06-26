@@ -197,7 +197,8 @@ class TestFomcStaticDates:
         assert len(fomc) == 1, f"Expected 1 FOMC event; got {len(fomc)}"
         assert fomc[0].high_impact is True
         assert fomc[0].rank == 1  # FOMC is rank 1 (highest priority)
-        assert fomc[0].time == "~14:00 ET"
+        # 2026-07-30 is summer (EDT, UTC-4): 14:00 ET -> 18:00 UTC -> 21:00 İst
+        assert fomc[0].time == "18:00 UTC · 21:00 İst"
 
     def test_fomc_date_outside_window_not_injected(self):
         """2026-09-17 FOMC is outside 7-day window of 2026-07-28 → NOT injected."""
@@ -409,3 +410,111 @@ class TestTransmissionRanking:
         cpi_idx = next(i for i, t in enumerate(titles) if "CPI" in t)
         ppi_idx = next(i for i, t in enumerate(titles) if "PPI" in t)
         assert cpi_idx < ppi_idx, "CPI (rank 2) should appear before PPI (rank 7)"
+
+
+# ---------------------------------------------------------------------------
+# 6. Release-time resolution — ET wall-clock -> UTC (DST-aware) + Istanbul (UTC+3)
+# ---------------------------------------------------------------------------
+class TestReleaseTimeDST:
+    """Each mapped release stamps time='HH:MM UTC · HH:MM İst'. DST correctness:
+    summer EDT=UTC-4 vs winter EST=UTC-5, resolved from the release DATE. Istanbul
+    is always UTC+3 (no DST). Unmapped titles keep time=None."""
+
+    def _cfg(self, releases: list[dict], fomc: Optional[list] = None) -> MagicMock:
+        cfg = MagicMock()
+        cfg.fred_api_key.return_value = "key"
+        cfg.fmp_api_key.return_value = None
+        cfg.finnhub_api_key.return_value = None
+        cfg.raw = {
+            "calendar": {
+                "provider": "fred",
+                "high_impact_events": [],
+                "fred_releases": releases,
+                "fomc_dates": fomc or [],
+            }
+        }
+        return cfg
+
+    def test_summer_0830_release_edt(self):
+        """SUMMER CPI (08:30 ET bucket): EDT=UTC-4 -> 12:30 UTC -> 15:30 İst."""
+        cfg = self._cfg([{"id": 10, "name": "Consumer Price Index (CPI)"}])
+        rd = [{"release_id": 10, "release_name": "CPI", "date": "2026-06-10"}]
+        http = _make_http(_make_fred_releases_response(rd))
+
+        events, reason = fetch_calendar_with_status(cfg, "2026-06-10", http=http)
+
+        assert reason is None
+        cpi = next(e for e in events if "CPI" in e.event)
+        assert cpi.time == "12:30 UTC · 15:30 İst"
+
+    def test_winter_0830_release_est(self):
+        """WINTER CPI (08:30 ET bucket): EST=UTC-5 -> 13:30 UTC -> 16:30 İst.
+
+        Same wall-clock as summer, ONE HOUR LATER in UTC — proves DST is applied
+        from the release date, not hardcoded."""
+        cfg = self._cfg([{"id": 10, "name": "Consumer Price Index (CPI)"}])
+        rd = [{"release_id": 10, "release_name": "CPI", "date": "2026-01-13"}]
+        http = _make_http(_make_fred_releases_response(rd))
+
+        events, reason = fetch_calendar_with_status(cfg, "2026-01-13", http=http)
+
+        assert reason is None
+        cpi = next(e for e in events if "CPI" in e.event)
+        assert cpi.time == "13:30 UTC · 16:30 İst"
+
+    def test_1000_bucket_umich_summer(self):
+        """SUMMER UMich (10:00 ET bucket): 10:00 EDT -> 14:00 UTC -> 17:00 İst."""
+        cfg = self._cfg([{"id": 91, "name": "Surveys of Consumers (UMich sentiment)"}])
+        rd = [{"release_id": 91, "release_name": "UMich", "date": "2026-06-12"}]
+        http = _make_http(_make_fred_releases_response(rd))
+
+        events, _ = fetch_calendar_with_status(cfg, "2026-06-12", http=http)
+
+        umich = next(e for e in events if "Surveys of Consumers" in e.event)
+        assert umich.time == "14:00 UTC · 17:00 İst"
+
+    def test_1400_bucket_fomc_winter(self):
+        """WINTER FOMC (14:00 ET bucket): 14:00 EST -> 19:00 UTC -> 22:00 İst."""
+        cfg = self._cfg([], fomc=["2026-01-28"])
+        http = _make_http(_make_fred_releases_response([]))
+
+        events, _ = fetch_calendar_with_status(cfg, "2026-01-28", http=http)
+
+        fomc = next(e for e in events if "FOMC" in e.event)
+        assert fomc.time == "19:00 UTC · 22:00 İst"
+
+    def test_1400_bucket_fomc_summer(self):
+        """SUMMER FOMC (14:00 ET bucket): 14:00 EDT -> 18:00 UTC -> 21:00 İst."""
+        cfg = self._cfg([], fomc=["2026-07-29"])
+        http = _make_http(_make_fred_releases_response([]))
+
+        events, _ = fetch_calendar_with_status(cfg, "2026-07-29", http=http)
+
+        fomc = next(e for e in events if "FOMC" in e.event)
+        assert fomc.time == "18:00 UTC · 21:00 İst"
+
+    def test_unmapped_event_time_stays_none(self):
+        """A configured release whose title matches no time substring -> time None
+        (do not guess). The event itself still appears in the calendar."""
+        cfg = self._cfg([{"id": 13, "name": "Industrial Production"}])
+        rd = [{"release_id": 13, "release_name": "Industrial Production", "date": "2026-06-15"}]
+        http = _make_http(_make_fred_releases_response(rd))
+
+        events, _ = fetch_calendar_with_status(cfg, "2026-06-15", http=http)
+
+        ev = next(e for e in events if "Industrial Production" in e.event)
+        assert ev.time is None
+
+    def test_config_release_times_override(self):
+        """calendar.release_times (ET 'HH:MM') overrides/extends the code map, and
+        is resolved with the same DST-aware UTC·İst formatting."""
+        cfg = self._cfg([{"id": 13, "name": "Industrial Production"}])
+        cfg.raw["calendar"]["release_times"] = {"industrial production": "09:15"}
+        rd = [{"release_id": 13, "release_name": "Industrial Production", "date": "2026-06-15"}]
+        http = _make_http(_make_fred_releases_response(rd))
+
+        events, _ = fetch_calendar_with_status(cfg, "2026-06-15", http=http)
+
+        ev = next(e for e in events if "Industrial Production" in e.event)
+        # 09:15 EDT -> 13:15 UTC -> 16:15 İst
+        assert ev.time == "13:15 UTC · 16:15 İst"
