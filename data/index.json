@@ -3,20 +3,11 @@
   "days": [
     {
       "date": "2026-06-26",
-      "run_ts_utc": "2026-06-26T13:17:35Z",
-      "calm_morning": true,
-      "red_count": 1,
+      "run_ts_utc": "2026-06-26T14:34:15Z",
+      "calm_morning": false,
+      "red_count": 2,
       "card_count": 1,
-      "degraded_sources": [
-        "spx",
-        "vix",
-        "usdjpy",
-        "brent",
-        "copper_gold",
-        "vix_term",
-        "rsp_spy",
-        "btc"
-      ],
+      "degraded_sources": [],
       "file": "2026-06-26.json"
     },
     {

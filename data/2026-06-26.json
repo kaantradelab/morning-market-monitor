@@ -2,39 +2,26 @@
   "schema_version": "1.0.0",
   "meta": {
     "date": "2026-06-26",
-    "run_ts_utc": "2026-06-26T13:17:35Z",
+    "run_ts_utc": "2026-06-26T14:34:15Z",
     "config_hash": "1e9ad7396383",
     "vol_model": "ewma",
     "percentile_window": "3y",
     "fpr_control": "fdr",
-    "calm_morning": true,
-    "degraded_sources": [
-      "spx",
-      "vix",
-      "usdjpy",
-      "brent",
-      "copper_gold",
-      "vix_term",
-      "rsp_spy",
-      "btc"
-    ]
+    "calm_morning": false,
+    "degraded_sources": []
   },
   "composites": {
     "ofr_fsi": {
-      "value": -2.424,
-      "level_pct": 9.391534,
-      "change_score": 1.643036,
+      "value": -2.152,
+      "level_pct": 25.925926,
+      "change_score": 1.419087,
       "color": "green",
       "staleness": {
-        "asof": "2026-06-23",
+        "asof": "2026-06-24",
         "lag_desc": "OFR 2-bd lag",
         "is_stale": false
       },
       "history": [
-        {
-          "date": "2026-05-13",
-          "value": -2.355
-        },
         {
           "date": "2026-05-14",
           "value": -2.479
@@ -150,6 +137,10 @@
         {
           "date": "2026-06-23",
           "value": -2.424
+        },
+        {
+          "date": "2026-06-24",
+          "value": -2.152
         }
       ]
     },
@@ -559,25 +550,21 @@
       "axis": 0,
       "label": "OFR FSI",
       "source": "ofr:fsi",
-      "value": -2.424,
-      "change": 0.3,
+      "value": -2.152,
+      "change": 0.272,
       "transform": "first_diff",
-      "ewma_z": 1.643036,
-      "pct_1y": 89.68254,
-      "pct_3y": 90.873016,
-      "level_pct_756": 9.391534,
-      "robust_z": 2.09624,
+      "ewma_z": 1.419087,
+      "pct_1y": 86.507937,
+      "pct_3y": 88.095238,
+      "level_pct_756": 25.925926,
+      "robust_z": 1.911083,
       "color": "green",
       "staleness": {
-        "asof": "2026-06-23",
+        "asof": "2026-06-24",
         "lag_desc": "OFR 2-bd lag",
         "is_stale": false
       },
       "history": [
-        {
-          "date": "2026-05-13",
-          "value": -2.355
-        },
         {
           "date": "2026-05-14",
           "value": -2.479
@@ -693,6 +680,10 @@
         {
           "date": "2026-06-23",
           "value": -2.424
+        },
+        {
+          "date": "2026-06-24",
+          "value": -2.152
         }
       ],
       "is_front_screen": true,
@@ -1135,21 +1126,142 @@
       "axis": 1,
       "label": "S&P 500 / ES",
       "source": "yfinance:ES=F",
-      "value": null,
-      "change": null,
+      "value": 7427.75,
+      "change": 0.000606,
       "transform": "log_return",
-      "ewma_z": null,
-      "pct_1y": null,
-      "pct_3y": null,
-      "level_pct_756": null,
-      "robust_z": null,
-      "color": "gray",
+      "ewma_z": 0.063282,
+      "pct_1y": 6.746032,
+      "pct_3y": 7.804233,
+      "level_pct_756": 97.089947,
+      "robust_z": -0.035957,
+      "color": "green",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-26",
         "lag_desc": "EOD delayed",
-        "is_stale": true
+        "is_stale": false
       },
-      "history": [],
+      "history": [
+        {
+          "date": "2026-05-14",
+          "value": 7525.5
+        },
+        {
+          "date": "2026-05-15",
+          "value": 7432.25
+        },
+        {
+          "date": "2026-05-18",
+          "value": 7425.75
+        },
+        {
+          "date": "2026-05-19",
+          "value": 7378.0
+        },
+        {
+          "date": "2026-05-20",
+          "value": 7451.75
+        },
+        {
+          "date": "2026-05-21",
+          "value": 7466.0
+        },
+        {
+          "date": "2026-05-22",
+          "value": 7491.0
+        },
+        {
+          "date": "2026-05-26",
+          "value": 7537.0
+        },
+        {
+          "date": "2026-05-27",
+          "value": 7540.0
+        },
+        {
+          "date": "2026-05-28",
+          "value": 7581.75
+        },
+        {
+          "date": "2026-05-29",
+          "value": 7595.75
+        },
+        {
+          "date": "2026-06-01",
+          "value": 7613.25
+        },
+        {
+          "date": "2026-06-02",
+          "value": 7623.75
+        },
+        {
+          "date": "2026-06-03",
+          "value": 7571.75
+        },
+        {
+          "date": "2026-06-04",
+          "value": 7601.0
+        },
+        {
+          "date": "2026-06-05",
+          "value": 7400.5
+        },
+        {
+          "date": "2026-06-08",
+          "value": 7416.0
+        },
+        {
+          "date": "2026-06-09",
+          "value": 7392.75
+        },
+        {
+          "date": "2026-06-10",
+          "value": 7278.5
+        },
+        {
+          "date": "2026-06-11",
+          "value": 7396.0
+        },
+        {
+          "date": "2026-06-12",
+          "value": 7435.0
+        },
+        {
+          "date": "2026-06-15",
+          "value": 7561.25
+        },
+        {
+          "date": "2026-06-16",
+          "value": 7518.5
+        },
+        {
+          "date": "2026-06-17",
+          "value": 7424.5
+        },
+        {
+          "date": "2026-06-18",
+          "value": 7508.43017578125
+        },
+        {
+          "date": "2026-06-22",
+          "value": 7541.25
+        },
+        {
+          "date": "2026-06-23",
+          "value": 7437.5
+        },
+        {
+          "date": "2026-06-24",
+          "value": 7428.25
+        },
+        {
+          "date": "2026-06-25",
+          "value": 7423.25
+        },
+        {
+          "date": "2026-06-26",
+          "value": 7427.75
+        }
+      ],
       "is_front_screen": true,
       "note": null
     },
@@ -1158,21 +1270,142 @@
       "axis": 1,
       "label": "VIX",
       "source": "yfinance:^VIX",
-      "value": null,
-      "change": null,
+      "value": 19.23,
+      "change": 0.34,
       "transform": "first_diff",
-      "ewma_z": null,
-      "pct_1y": null,
-      "pct_3y": null,
-      "level_pct_756": null,
-      "robust_z": null,
-      "color": "gray",
+      "ewma_z": 0.198241,
+      "pct_1y": 26.190476,
+      "pct_3y": 24.933687,
+      "level_pct_756": 78.675497,
+      "robust_z": 0.484256,
+      "color": "green",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-26",
         "lag_desc": "EOD delayed",
-        "is_stale": true
+        "is_stale": false
       },
-      "history": [],
+      "history": [
+        {
+          "date": "2026-05-15",
+          "value": 18.43000030517578
+        },
+        {
+          "date": "2026-05-18",
+          "value": 17.81999969482422
+        },
+        {
+          "date": "2026-05-19",
+          "value": 18.059999465942383
+        },
+        {
+          "date": "2026-05-20",
+          "value": 17.440000534057617
+        },
+        {
+          "date": "2026-05-21",
+          "value": 16.760000228881836
+        },
+        {
+          "date": "2026-05-22",
+          "value": 16.700000762939453
+        },
+        {
+          "date": "2026-05-25",
+          "value": 16.59000015258789
+        },
+        {
+          "date": "2026-05-26",
+          "value": 17.010000228881836
+        },
+        {
+          "date": "2026-05-27",
+          "value": 16.290000915527344
+        },
+        {
+          "date": "2026-05-28",
+          "value": 15.739999771118164
+        },
+        {
+          "date": "2026-05-29",
+          "value": 15.319999694824219
+        },
+        {
+          "date": "2026-06-01",
+          "value": 16.049999237060547
+        },
+        {
+          "date": "2026-06-02",
+          "value": 15.770000457763672
+        },
+        {
+          "date": "2026-06-03",
+          "value": 16.059999465942383
+        },
+        {
+          "date": "2026-06-04",
+          "value": 15.399999618530273
+        },
+        {
+          "date": "2026-06-05",
+          "value": 21.510000228881836
+        },
+        {
+          "date": "2026-06-08",
+          "value": 18.920000076293945
+        },
+        {
+          "date": "2026-06-09",
+          "value": 19.8700008392334
+        },
+        {
+          "date": "2026-06-10",
+          "value": 22.219999313354492
+        },
+        {
+          "date": "2026-06-11",
+          "value": 19.440000534057617
+        },
+        {
+          "date": "2026-06-12",
+          "value": 17.68000030517578
+        },
+        {
+          "date": "2026-06-15",
+          "value": 16.200000762939453
+        },
+        {
+          "date": "2026-06-16",
+          "value": 16.40999984741211
+        },
+        {
+          "date": "2026-06-17",
+          "value": 18.440000534057617
+        },
+        {
+          "date": "2026-06-18",
+          "value": 16.399999618530273
+        },
+        {
+          "date": "2026-06-22",
+          "value": 17.280000686645508
+        },
+        {
+          "date": "2026-06-23",
+          "value": 19.489999771118164
+        },
+        {
+          "date": "2026-06-24",
+          "value": 18.6299991607666
+        },
+        {
+          "date": "2026-06-25",
+          "value": 18.889999389648438
+        },
+        {
+          "date": "2026-06-26",
+          "value": 19.229999542236328
+        }
+      ],
       "is_front_screen": true,
       "note": "prices insurance, orthogonal to SPX level"
     },
@@ -2189,21 +2422,142 @@
       "axis": 6,
       "label": "USDJPY",
       "source": "yfinance:JPY=X",
-      "value": null,
-      "change": null,
+      "value": 161.763,
+      "change": 0.001014,
       "transform": "log_return",
-      "ewma_z": null,
-      "pct_1y": null,
-      "pct_3y": null,
-      "level_pct_756": null,
-      "robust_z": null,
-      "color": "gray",
+      "ewma_z": 0.39805,
+      "pct_1y": 35.714286,
+      "pct_3y": 36.111111,
+      "level_pct_756": 100.0,
+      "robust_z": 0.098883,
+      "color": "green",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-25",
         "lag_desc": "EOD delayed",
-        "is_stale": true
+        "is_stale": false
       },
-      "history": [],
+      "history": [
+        {
+          "date": "2026-05-15",
+          "value": 158.3820037841797
+        },
+        {
+          "date": "2026-05-18",
+          "value": 158.843994140625
+        },
+        {
+          "date": "2026-05-19",
+          "value": 158.86099243164062
+        },
+        {
+          "date": "2026-05-20",
+          "value": 159.03500366210938
+        },
+        {
+          "date": "2026-05-21",
+          "value": 158.88800048828125
+        },
+        {
+          "date": "2026-05-22",
+          "value": 159.01800537109375
+        },
+        {
+          "date": "2026-05-25",
+          "value": 158.9459991455078
+        },
+        {
+          "date": "2026-05-26",
+          "value": 158.95399475097656
+        },
+        {
+          "date": "2026-05-27",
+          "value": 159.2429962158203
+        },
+        {
+          "date": "2026-05-28",
+          "value": 159.5679931640625
+        },
+        {
+          "date": "2026-05-29",
+          "value": 159.27000427246094
+        },
+        {
+          "date": "2026-06-01",
+          "value": 159.35299682617188
+        },
+        {
+          "date": "2026-06-02",
+          "value": 159.63600158691406
+        },
+        {
+          "date": "2026-06-03",
+          "value": 159.96800231933594
+        },
+        {
+          "date": "2026-06-04",
+          "value": 159.94000244140625
+        },
+        {
+          "date": "2026-06-05",
+          "value": 159.99000549316406
+        },
+        {
+          "date": "2026-06-08",
+          "value": 160.32699584960938
+        },
+        {
+          "date": "2026-06-09",
+          "value": 160.1739959716797
+        },
+        {
+          "date": "2026-06-10",
+          "value": 160.38400268554688
+        },
+        {
+          "date": "2026-06-11",
+          "value": 160.52699279785156
+        },
+        {
+          "date": "2026-06-12",
+          "value": 160.1300048828125
+        },
+        {
+          "date": "2026-06-15",
+          "value": 159.9550018310547
+        },
+        {
+          "date": "2026-06-16",
+          "value": 160.22900390625
+        },
+        {
+          "date": "2026-06-17",
+          "value": 160.41900634765625
+        },
+        {
+          "date": "2026-06-18",
+          "value": 160.60000610351562
+        },
+        {
+          "date": "2026-06-19",
+          "value": 161.28900146484375
+        },
+        {
+          "date": "2026-06-22",
+          "value": 161.43299865722656
+        },
+        {
+          "date": "2026-06-23",
+          "value": 161.57000732421875
+        },
+        {
+          "date": "2026-06-24",
+          "value": 161.5989990234375
+        },
+        {
+          "date": "2026-06-25",
+          "value": 161.76300048828125
+        }
+      ],
       "is_front_screen": true,
       "note": null
     },
@@ -2212,21 +2566,142 @@
       "axis": 7,
       "label": "Brent",
       "source": "yfinance:BZ=F",
-      "value": null,
-      "change": null,
+      "value": 72.650002,
+      "change": -0.035295,
       "transform": "log_return",
-      "ewma_z": null,
-      "pct_1y": null,
-      "pct_3y": null,
-      "level_pct_756": null,
-      "robust_z": null,
-      "color": "gray",
+      "ewma_z": -1.065627,
+      "pct_1y": 75.396825,
+      "pct_3y": 74.603175,
+      "level_pct_756": 34.920635,
+      "robust_z": -2.052762,
+      "color": "green",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-26",
         "lag_desc": "EOD delayed",
-        "is_stale": true
+        "is_stale": false
       },
-      "history": [],
+      "history": [
+        {
+          "date": "2026-05-14",
+          "value": 105.72000122070312
+        },
+        {
+          "date": "2026-05-15",
+          "value": 109.26000213623047
+        },
+        {
+          "date": "2026-05-18",
+          "value": 112.0999984741211
+        },
+        {
+          "date": "2026-05-19",
+          "value": 111.27999877929688
+        },
+        {
+          "date": "2026-05-20",
+          "value": 105.0199966430664
+        },
+        {
+          "date": "2026-05-21",
+          "value": 102.58000183105469
+        },
+        {
+          "date": "2026-05-22",
+          "value": 103.54000091552734
+        },
+        {
+          "date": "2026-05-26",
+          "value": 99.58000183105469
+        },
+        {
+          "date": "2026-05-27",
+          "value": 94.29000091552734
+        },
+        {
+          "date": "2026-05-28",
+          "value": 93.70999908447266
+        },
+        {
+          "date": "2026-05-29",
+          "value": 92.05000305175781
+        },
+        {
+          "date": "2026-06-01",
+          "value": 94.9800033569336
+        },
+        {
+          "date": "2026-06-02",
+          "value": 96.0
+        },
+        {
+          "date": "2026-06-03",
+          "value": 97.80999755859375
+        },
+        {
+          "date": "2026-06-04",
+          "value": 95.02999877929688
+        },
+        {
+          "date": "2026-06-05",
+          "value": 93.08999633789062
+        },
+        {
+          "date": "2026-06-08",
+          "value": 94.25
+        },
+        {
+          "date": "2026-06-09",
+          "value": 91.44999694824219
+        },
+        {
+          "date": "2026-06-10",
+          "value": 93.0999984741211
+        },
+        {
+          "date": "2026-06-11",
+          "value": 90.37999725341797
+        },
+        {
+          "date": "2026-06-12",
+          "value": 87.33000183105469
+        },
+        {
+          "date": "2026-06-15",
+          "value": 83.16999816894531
+        },
+        {
+          "date": "2026-06-16",
+          "value": 78.95999908447266
+        },
+        {
+          "date": "2026-06-17",
+          "value": 79.55000305175781
+        },
+        {
+          "date": "2026-06-18",
+          "value": 79.8499984741211
+        },
+        {
+          "date": "2026-06-22",
+          "value": 77.9000015258789
+        },
+        {
+          "date": "2026-06-23",
+          "value": 77.08000183105469
+        },
+        {
+          "date": "2026-06-24",
+          "value": 73.73999786376953
+        },
+        {
+          "date": "2026-06-25",
+          "value": 75.26000213623047
+        },
+        {
+          "date": "2026-06-26",
+          "value": 72.6500015258789
+        }
+      ],
       "is_front_screen": false,
       "note": null
     },
@@ -2235,21 +2710,142 @@
       "axis": 7,
       "label": "Copper / Gold ratio",
       "source": "derived:ratio:yfinance:HG=F/yfinance:GC=F",
-      "value": null,
-      "change": null,
+      "value": 0.001513,
+      "change": 7e-06,
       "transform": "ratio",
-      "ewma_z": null,
-      "pct_1y": null,
-      "pct_3y": null,
-      "level_pct_756": null,
-      "robust_z": null,
-      "color": "gray",
+      "ewma_z": 0.349902,
+      "pct_1y": 44.444444,
+      "pct_3y": 35.629139,
+      "level_pct_756": 37.698413,
+      "robust_z": 0.388878,
+      "color": "green",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-26",
         "lag_desc": "EOD delayed",
-        "is_stale": true
+        "is_stale": false
       },
-      "history": [],
+      "history": [
+        {
+          "date": "2026-05-14",
+          "value": 0.0014038819130294511
+        },
+        {
+          "date": "2026-05-15",
+          "value": 0.0013722069444902928
+        },
+        {
+          "date": "2026-05-18",
+          "value": 0.0013777045219040126
+        },
+        {
+          "date": "2026-05-19",
+          "value": 0.0013680847322763857
+        },
+        {
+          "date": "2026-05-20",
+          "value": 0.0013882330534661688
+        },
+        {
+          "date": "2026-05-21",
+          "value": 0.0013782546012319427
+        },
+        {
+          "date": "2026-05-22",
+          "value": 0.0014027869957154158
+        },
+        {
+          "date": "2026-05-26",
+          "value": 0.0014134299615735104
+        },
+        {
+          "date": "2026-05-27",
+          "value": 0.0014176503267765313
+        },
+        {
+          "date": "2026-05-28",
+          "value": 0.0014215545053885338
+        },
+        {
+          "date": "2026-05-29",
+          "value": 0.001394474275043405
+        },
+        {
+          "date": "2026-06-01",
+          "value": 0.0014578119152479866
+        },
+        {
+          "date": "2026-06-02",
+          "value": 0.0014812545384452814
+        },
+        {
+          "date": "2026-06-03",
+          "value": 0.0014607703160654396
+        },
+        {
+          "date": "2026-06-04",
+          "value": 0.001454712105216061
+        },
+        {
+          "date": "2026-06-05",
+          "value": 0.001444167778605759
+        },
+        {
+          "date": "2026-06-08",
+          "value": 0.0014597892804081747
+        },
+        {
+          "date": "2026-06-09",
+          "value": 0.001479460040168583
+        },
+        {
+          "date": "2026-06-10",
+          "value": 0.001521104078523102
+        },
+        {
+          "date": "2026-06-11",
+          "value": 0.0015302055472231518
+        },
+        {
+          "date": "2026-06-12",
+          "value": 0.0015256227830409439
+        },
+        {
+          "date": "2026-06-15",
+          "value": 0.001497805008385847
+        },
+        {
+          "date": "2026-06-16",
+          "value": 0.001498302890834712
+        },
+        {
+          "date": "2026-06-17",
+          "value": 0.0014869577861350144
+        },
+        {
+          "date": "2026-06-18",
+          "value": 0.001509078774283296
+        },
+        {
+          "date": "2026-06-22",
+          "value": 0.0015200029405798754
+        },
+        {
+          "date": "2026-06-23",
+          "value": 0.0014869609286465473
+        },
+        {
+          "date": "2026-06-24",
+          "value": 0.0014893616437510909
+        },
+        {
+          "date": "2026-06-25",
+          "value": 0.0015061406517809636
+        },
+        {
+          "date": "2026-06-26",
+          "value": 0.0015134528520546677
+        }
+      ],
       "is_front_screen": false,
       "note": "clean growth read (daily copper/gold ratio supersedes monthly-copper); oil is geopolitics-contaminated"
     },
@@ -2258,21 +2854,142 @@
       "axis": 8,
       "label": "VIX / VIX3M",
       "source": "derived:ratio:yfinance:^VIX/yfinance:^VIX3M",
-      "value": null,
-      "change": null,
+      "value": 0.934402,
+      "change": 0.096385,
       "transform": "ratio",
-      "ewma_z": null,
-      "pct_1y": null,
-      "pct_3y": null,
-      "level_pct_756": null,
-      "robust_z": null,
-      "color": "gray",
+      "ewma_z": 1.997382,
+      "pct_1y": 95.238095,
+      "pct_3y": 94.526035,
+      "level_pct_756": 75.2,
+      "robust_z": 4.505482,
+      "color": "red",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-26",
         "lag_desc": "EOD delayed",
-        "is_stale": true
+        "is_stale": false
       },
-      "history": [],
+      "history": [
+        {
+          "date": "2026-05-08",
+          "value": 0.8385366114174447
+        },
+        {
+          "date": "2026-05-11",
+          "value": 0.8653483690597517
+        },
+        {
+          "date": "2026-05-12",
+          "value": 0.8550379747294448
+        },
+        {
+          "date": "2026-05-13",
+          "value": 0.8437205184962384
+        },
+        {
+          "date": "2026-05-14",
+          "value": 0.8278177416352244
+        },
+        {
+          "date": "2026-05-15",
+          "value": 0.8628277049881808
+        },
+        {
+          "date": "2026-05-18",
+          "value": 0.851816425900372
+        },
+        {
+          "date": "2026-05-19",
+          "value": 0.8551135770976567
+        },
+        {
+          "date": "2026-05-20",
+          "value": 0.8400770877542982
+        },
+        {
+          "date": "2026-05-21",
+          "value": 0.8380000114440918
+        },
+        {
+          "date": "2026-05-22",
+          "value": 0.8337493854442927
+        },
+        {
+          "date": "2026-05-26",
+          "value": 0.8552036576599661
+        },
+        {
+          "date": "2026-05-27",
+          "value": 0.8375321478941401
+        },
+        {
+          "date": "2026-05-28",
+          "value": 0.8236524996546611
+        },
+        {
+          "date": "2026-05-29",
+          "value": 0.8210074930385863
+        },
+        {
+          "date": "2026-06-01",
+          "value": 0.8260421505389856
+        },
+        {
+          "date": "2026-06-02",
+          "value": 0.8091329216500514
+        },
+        {
+          "date": "2026-06-03",
+          "value": 0.8127529999958494
+        },
+        {
+          "date": "2026-06-04",
+          "value": 0.8008320325076488
+        },
+        {
+          "date": "2026-06-05",
+          "value": 0.9857928748726832
+        },
+        {
+          "date": "2026-06-08",
+          "value": 0.9100528736467367
+        },
+        {
+          "date": "2026-06-09",
+          "value": 0.9324261537870806
+        },
+        {
+          "date": "2026-06-10",
+          "value": 0.9707295721206117
+        },
+        {
+          "date": "2026-06-11",
+          "value": 0.9075630469101799
+        },
+        {
+          "date": "2026-06-12",
+          "value": 0.8620185328071865
+        },
+        {
+          "date": "2026-06-15",
+          "value": 0.8367768725315796
+        },
+        {
+          "date": "2026-06-16",
+          "value": 0.8402457383748667
+        },
+        {
+          "date": "2026-06-17",
+          "value": 0.894277390084877
+        },
+        {
+          "date": "2026-06-18",
+          "value": 0.8380173671064322
+        },
+        {
+          "date": "2026-06-26",
+          "value": 0.9344023135823891
+        }
+      ],
       "is_front_screen": true,
       "note": "ratio>1.0 = backwardation = acute stress"
     },
@@ -3145,21 +3862,142 @@
       "axis": 10,
       "label": "RSP/SPY (equal vs cap weight)",
       "source": "derived:ratio:yfinance:RSP/yfinance:SPY",
-      "value": null,
-      "change": null,
+      "value": 0.289474,
+      "change": 0.001105,
       "transform": "ratio",
-      "ewma_z": null,
-      "pct_1y": null,
-      "pct_3y": null,
-      "level_pct_756": null,
-      "robust_z": null,
-      "color": "gray",
+      "ewma_z": 0.684174,
+      "pct_1y": 51.190476,
+      "pct_3y": 51.792829,
+      "level_pct_756": 21.352785,
+      "robust_z": 0.909786,
+      "color": "green",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-26",
         "lag_desc": "EOD delayed",
-        "is_stale": true
+        "is_stale": false
       },
-      "history": [],
+      "history": [
+        {
+          "date": "2026-05-14",
+          "value": 0.27221087228056545
+        },
+        {
+          "date": "2026-05-15",
+          "value": 0.27268422990479135
+        },
+        {
+          "date": "2026-05-18",
+          "value": 0.27455492635044565
+        },
+        {
+          "date": "2026-05-19",
+          "value": 0.2747877291157992
+        },
+        {
+          "date": "2026-05-20",
+          "value": 0.27498145272317664
+        },
+        {
+          "date": "2026-05-21",
+          "value": 0.27562205782627663
+        },
+        {
+          "date": "2026-05-22",
+          "value": 0.2770505844277353
+        },
+        {
+          "date": "2026-05-26",
+          "value": 0.2766357025279673
+        },
+        {
+          "date": "2026-05-27",
+          "value": 0.2764837558538517
+        },
+        {
+          "date": "2026-05-28",
+          "value": 0.27597403490279265
+        },
+        {
+          "date": "2026-05-29",
+          "value": 0.2760548953346445
+        },
+        {
+          "date": "2026-06-01",
+          "value": 0.275806170767608
+        },
+        {
+          "date": "2026-06-02",
+          "value": 0.27652486441118557
+        },
+        {
+          "date": "2026-06-03",
+          "value": 0.2774315903549174
+        },
+        {
+          "date": "2026-06-04",
+          "value": 0.2784741501703904
+        },
+        {
+          "date": "2026-06-05",
+          "value": 0.2817842929575003
+        },
+        {
+          "date": "2026-06-08",
+          "value": 0.28085009718132864
+        },
+        {
+          "date": "2026-06-09",
+          "value": 0.28382064433351023
+        },
+        {
+          "date": "2026-06-10",
+          "value": 0.2847001100926385
+        },
+        {
+          "date": "2026-06-11",
+          "value": 0.28430654579208536
+        },
+        {
+          "date": "2026-06-12",
+          "value": 0.28533871775730957
+        },
+        {
+          "date": "2026-06-15",
+          "value": 0.28202376702445636
+        },
+        {
+          "date": "2026-06-16",
+          "value": 0.282768906129928
+        },
+        {
+          "date": "2026-06-17",
+          "value": 0.28205301135784683
+        },
+        {
+          "date": "2026-06-18",
+          "value": 0.28116882644515695
+        },
+        {
+          "date": "2026-06-22",
+          "value": 0.28158626054293157
+        },
+        {
+          "date": "2026-06-23",
+          "value": 0.2847542115696222
+        },
+        {
+          "date": "2026-06-24",
+          "value": 0.28691834554136364
+        },
+        {
+          "date": "2026-06-25",
+          "value": 0.28836988086632187
+        },
+        {
+          "date": "2026-06-26",
+          "value": 0.28947438917839813
+        }
+      ],
       "is_front_screen": true,
       "note": null
     },
@@ -3600,21 +4438,142 @@
       "axis": 12,
       "label": "BTC",
       "source": "yfinance:BTC-USD",
-      "value": null,
-      "change": null,
+      "value": 59814.070312,
+      "change": 0.001546,
       "transform": "log_return",
-      "ewma_z": null,
-      "pct_1y": null,
-      "pct_3y": null,
-      "level_pct_756": null,
-      "robust_z": null,
-      "color": "gray",
+      "ewma_z": 0.074741,
+      "pct_1y": 8.333333,
+      "pct_3y": 8.730159,
+      "level_pct_756": 5.820106,
+      "robust_z": 0.085489,
+      "color": "green",
       "staleness": {
-        "asof": null,
+        "asof": "2026-06-26",
         "lag_desc": "EOD delayed",
-        "is_stale": true
+        "is_stale": false
       },
-      "history": [],
+      "history": [
+        {
+          "date": "2026-05-28",
+          "value": 73536.5546875
+        },
+        {
+          "date": "2026-05-29",
+          "value": 73372.5234375
+        },
+        {
+          "date": "2026-05-30",
+          "value": 73754.8359375
+        },
+        {
+          "date": "2026-05-31",
+          "value": 73579.6875
+        },
+        {
+          "date": "2026-06-01",
+          "value": 71319.7734375
+        },
+        {
+          "date": "2026-06-02",
+          "value": 66703.65625
+        },
+        {
+          "date": "2026-06-03",
+          "value": 64014.3671875
+        },
+        {
+          "date": "2026-06-04",
+          "value": 63801.57421875
+        },
+        {
+          "date": "2026-06-05",
+          "value": 60922.66796875
+        },
+        {
+          "date": "2026-06-06",
+          "value": 60867.4140625
+        },
+        {
+          "date": "2026-06-07",
+          "value": 63239.51953125
+        },
+        {
+          "date": "2026-06-08",
+          "value": 63090.58984375
+        },
+        {
+          "date": "2026-06-09",
+          "value": 61643.78125
+        },
+        {
+          "date": "2026-06-10",
+          "value": 61449.2890625
+        },
+        {
+          "date": "2026-06-11",
+          "value": 63561.0546875
+        },
+        {
+          "date": "2026-06-12",
+          "value": 63543.19921875
+        },
+        {
+          "date": "2026-06-13",
+          "value": 64421.32421875
+        },
+        {
+          "date": "2026-06-14",
+          "value": 65710.3984375
+        },
+        {
+          "date": "2026-06-15",
+          "value": 66289.5
+        },
+        {
+          "date": "2026-06-16",
+          "value": 65600.640625
+        },
+        {
+          "date": "2026-06-17",
+          "value": 64418.4453125
+        },
+        {
+          "date": "2026-06-18",
+          "value": 62896.47265625
+        },
+        {
+          "date": "2026-06-19",
+          "value": 63540.8359375
+        },
+        {
+          "date": "2026-06-20",
+          "value": 64239.67578125
+        },
+        {
+          "date": "2026-06-21",
+          "value": 63237.5390625
+        },
+        {
+          "date": "2026-06-22",
+          "value": 63952.10546875
+        },
+        {
+          "date": "2026-06-23",
+          "value": 62668.01953125
+        },
+        {
+          "date": "2026-06-24",
+          "value": 60995.1328125
+        },
+        {
+          "date": "2026-06-25",
+          "value": 59721.67578125
+        },
+        {
+          "date": "2026-06-26",
+          "value": 59814.0703125
+        }
+      ],
       "is_front_screen": false,
       "note": null
     },
@@ -3623,14 +4582,14 @@
       "axis": 12,
       "label": "Stablecoin aggregate cap",
       "source": "defillama:stablecoins",
-      "value": 312379225933.75,
-      "change": -0.000315,
+      "value": 312394275464.73,
+      "change": -0.000266,
       "transform": "log_return",
-      "ewma_z": -0.231084,
-      "pct_1y": 23.809524,
-      "pct_3y": 24.338624,
+      "ewma_z": -0.195701,
+      "pct_1y": 20.634921,
+      "pct_3y": 20.634921,
       "level_pct_756": 85.714286,
-      "robust_z": -0.349504,
+      "robust_z": -0.327903,
       "color": "green",
       "staleness": {
         "asof": "2026-06-26",
@@ -3756,7 +4715,7 @@
         },
         {
           "date": "2026-06-26",
-          "value": 312379225933.75
+          "value": 312394275464.73
         }
       ],
       "is_front_screen": false,
@@ -3771,12 +4730,13 @@
       "why_now": {
         "percentile_or_z": "99th pct / +3.4-sigma",
         "calendar_event": "Employment Situation (NFP)",
-        "cross_asset_confirm_or_contradict": "confirmed by OFR FSI + 10Y Real (DFII10)"
+        "cross_asset_confirm_or_contradict": "confirmed by 10Y Real (DFII10) + VIX / VIX3M"
       },
       "color": "red",
       "is_banner": false,
       "tile_keys": [
-        "usd_broad"
+        "usd_broad",
+        "vix_term"
       ]
     }
   ],
@@ -3852,47 +4812,47 @@
   "corr_breaks": [
     {
       "name": "gold_vs_realyield_usd",
-      "residual_z": null,
+      "residual_z": 0.6795,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "target degraded/missing"
+      "note": "residual +0.68 EWMA-sigma, persisted 0d (need 3d)"
     },
     {
       "name": "hy_oas_vs_acwi_vix",
-      "residual_z": null,
+      "residual_z": 1.2672,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "factor degraded/missing"
+      "note": "residual +1.27 EWMA-sigma, persisted 0d (need 3d)"
     },
     {
       "name": "stock_bond_corr",
-      "residual_z": null,
+      "residual_z": -0.0185,
       "persistence_days": 0,
       "triggered": false,
       "sign_flip": false,
-      "note": "target degraded/missing"
+      "note": "residual -0.02 EWMA-sigma, persisted 0d (need 3d)"
     }
   ],
   "dog_didnt_bark": [
     {
       "tile_key": "spx",
       "event": "Employment Situation (NFP)",
-      "expected_move": null,
-      "realized_move": null,
-      "ratio": null,
-      "triggered": false,
-      "note": "tile degraded/missing"
+      "expected_move": 0.7924,
+      "realized_move": 0.0635,
+      "ratio": 0.0801,
+      "triggered": true,
+      "note": "realized 0.06sigma vs expected 0.79sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.08, threshold 0.5) NO-BARK \u2014 confidence reduced"
     },
     {
       "tile_key": "vix",
       "event": "Employment Situation (NFP)",
-      "expected_move": null,
-      "realized_move": null,
-      "ratio": null,
-      "triggered": false,
-      "note": "tile degraded/missing"
+      "expected_move": 0.7427,
+      "realized_move": 0.1982,
+      "ratio": 0.2669,
+      "triggered": true,
+      "note": "realized 0.20sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.27, threshold 0.5) NO-BARK \u2014 confidence reduced"
     },
     {
       "tile_key": "ust_2y",
@@ -3915,29 +4875,29 @@
     {
       "tile_key": "usdjpy",
       "event": "Employment Situation (NFP)",
-      "expected_move": null,
-      "realized_move": null,
-      "ratio": null,
+      "expected_move": 0.7594,
+      "realized_move": 0.4048,
+      "ratio": 0.533,
       "triggered": false,
-      "note": "tile degraded/missing"
+      "note": "realized 0.40sigma vs expected 0.76sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.53, threshold 0.5) normal \u2014 confidence reduced"
     },
     {
       "tile_key": "spx",
       "event": "Job Openings and Labor Turnover Survey (JOLTS)",
-      "expected_move": null,
-      "realized_move": null,
-      "ratio": null,
-      "triggered": false,
-      "note": "tile degraded/missing"
+      "expected_move": 0.7924,
+      "realized_move": 0.0635,
+      "ratio": 0.0801,
+      "triggered": true,
+      "note": "realized 0.06sigma vs expected 0.79sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.08, threshold 0.5) NO-BARK \u2014 confidence reduced"
     },
     {
       "tile_key": "vix",
       "event": "Job Openings and Labor Turnover Survey (JOLTS)",
-      "expected_move": null,
-      "realized_move": null,
-      "ratio": null,
-      "triggered": false,
-      "note": "tile degraded/missing"
+      "expected_move": 0.7427,
+      "realized_move": 0.1982,
+      "ratio": 0.2669,
+      "triggered": true,
+      "note": "realized 0.20sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.27, threshold 0.5) NO-BARK \u2014 confidence reduced"
     },
     {
       "tile_key": "ust_2y",
@@ -3960,29 +4920,29 @@
     {
       "tile_key": "usdjpy",
       "event": "Job Openings and Labor Turnover Survey (JOLTS)",
-      "expected_move": null,
-      "realized_move": null,
-      "ratio": null,
+      "expected_move": 0.7594,
+      "realized_move": 0.4048,
+      "ratio": 0.533,
       "triggered": false,
-      "note": "tile degraded/missing"
+      "note": "realized 0.40sigma vs expected 0.76sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.53, threshold 0.5) normal \u2014 confidence reduced"
     },
     {
       "tile_key": "spx",
       "event": "Initial Jobless Claims",
-      "expected_move": null,
-      "realized_move": null,
-      "ratio": null,
-      "triggered": false,
-      "note": "tile degraded/missing"
+      "expected_move": 0.7924,
+      "realized_move": 0.0635,
+      "ratio": 0.0801,
+      "triggered": true,
+      "note": "realized 0.06sigma vs expected 0.79sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.08, threshold 0.5) NO-BARK \u2014 confidence reduced"
     },
     {
       "tile_key": "vix",
       "event": "Initial Jobless Claims",
-      "expected_move": null,
-      "realized_move": null,
-      "ratio": null,
-      "triggered": false,
-      "note": "tile degraded/missing"
+      "expected_move": 0.7427,
+      "realized_move": 0.1982,
+      "ratio": 0.2669,
+      "triggered": true,
+      "note": "realized 0.20sigma vs expected 0.74sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.27, threshold 0.5) NO-BARK \u2014 confidence reduced"
     },
     {
       "tile_key": "ust_2y",
@@ -4005,11 +4965,11 @@
     {
       "tile_key": "usdjpy",
       "event": "Initial Jobless Claims",
-      "expected_move": null,
-      "realized_move": null,
-      "ratio": null,
+      "expected_move": 0.7594,
+      "realized_move": 0.4048,
+      "ratio": 0.533,
       "triggered": false,
-      "note": "tile degraded/missing"
+      "note": "realized 0.40sigma vs expected 0.76sigma [all-day mean (LOW-CONFIDENCE: thin event-day history)] (ratio 0.53, threshold 0.5) normal \u2014 confidence reduced"
     }
   ]
 }
