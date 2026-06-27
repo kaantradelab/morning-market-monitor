@@ -21,6 +21,7 @@ high_impact via config.calendar.high_impact_events or the provider impact field.
 
 from __future__ import annotations
 
+import time
 from datetime import date as date_cls, datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -29,6 +30,7 @@ import httpx
 
 from ..config import Config
 from ..models import CalendarEvent
+from ._retry import _RETRY_ATTEMPTS, _RETRY_BASE_DELAY, _RETRY_FACTOR
 
 _FRED_RELEASES_BASE = "https://api.stlouisfed.org/fred"
 
@@ -242,10 +244,40 @@ def _fetch_fred(
                 "sort_order": "asc",
                 "limit": 50,  # <= 1000; the next handful of dates is plenty for a 7-day window
             }
-            try:
-                resp = http.get(url, params=params, timeout=30.0)
-            except Exception as exc:  # noqa: BLE001
-                raise _CalendarHTTPError(f"calendar:FRED network {type(exc).__name__}") from exc
+            # Bounded retry: transient transport errors and 5xx are retried.
+            # 401/403/other-4xx are NOT transient — they pass through to the
+            # status checks below without retry. Non-transport exceptions
+            # (unexpected errors) raise immediately, preserving existing
+            # behaviour. Sleeps are via the module-level `time` reference so
+            # tests can monkeypatch `calendar.time.sleep` to a no-op.
+            _last_t_exc: Optional[Exception] = None
+            _last_5xx: Optional[int] = None
+            resp = None
+            for _attempt in range(_RETRY_ATTEMPTS):
+                try:
+                    resp = http.get(url, params=params, timeout=30.0)
+                except httpx.TransportError as _exc:
+                    _last_t_exc = _exc
+                    if _attempt < _RETRY_ATTEMPTS - 1:
+                        time.sleep(_RETRY_BASE_DELAY * (_RETRY_FACTOR ** _attempt))
+                    continue
+                except Exception as exc:  # noqa: BLE001 — non-transport: raise immediately
+                    raise _CalendarHTTPError(
+                        f"calendar:FRED network {type(exc).__name__}"
+                    ) from exc
+                if resp.status_code >= 500:
+                    _last_5xx = resp.status_code
+                    if _attempt < _RETRY_ATTEMPTS - 1:
+                        time.sleep(_RETRY_BASE_DELAY * (_RETRY_FACTOR ** _attempt))
+                    continue
+                break  # 2xx or 4xx — handle below
+            else:
+                # All attempts exhausted without a usable response.
+                if _last_t_exc is not None:
+                    raise _CalendarHTTPError(
+                        f"calendar:FRED network {type(_last_t_exc).__name__}"
+                    ) from _last_t_exc
+                raise _CalendarHTTPError(f"calendar:FRED {_last_5xx}")
 
             if resp.status_code in (401, 403):
                 raise _CalendarHTTPError(f"calendar:FRED {resp.status_code} (auth)")

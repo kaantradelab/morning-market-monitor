@@ -23,6 +23,7 @@ Routing is driven by each tile's `source` string in config.yaml:
 
 from __future__ import annotations
 
+import time
 from datetime import date as date_cls
 from typing import Optional
 
@@ -30,6 +31,7 @@ import httpx
 
 from ..config import Config
 from ..models import RawSeries
+from ._retry import _RETRY_ATTEMPTS, _RETRY_BASE_DELAY, _RETRY_FACTOR
 from . import calendar as calendar_mod  # noqa: F401 — re-export convenience
 from .composites import fetch_ofr_fsi
 from .crypto import fetch_stablecoin_cap
@@ -233,7 +235,8 @@ def _fetch_tile(
                 den = _safe(lambda: fetch_yf_series(tickers[1]),
                             key=key, source=source, lag_desc="EOD delayed")
                 return _safe(lambda: build_ratio(num, den, tile_key=key),
-                             key=key, source=source, lag_desc="EOD delayed")
+                             key=key, source=source, lag_desc="EOD delayed",
+                             retry=False)
             return _degraded(key, source, "EOD delayed", "no yfinance tickers in source")
 
         if kind == "derived":
@@ -262,33 +265,76 @@ def _fetch_derived(key: str, rest: str, source: str, fred) -> RawSeries:
     if rest.startswith("realized_vol_dgs10"):
         dgs10 = fred("DGS10", lag_desc="FRED daily")
         return _safe(lambda: build_realized_vol(dgs10, window=20, tile_key=key),
-                     key=key, source=source, lag_desc="derived (DGS10 20d rv)")
+                     key=key, source=source, lag_desc="derived (DGS10 20d rv)",
+                     retry=False)
 
     if rest.startswith("fred_walcl"):
         walcl = fred("WALCL", lag_desc="H.4.1 weekly Thu")
         tga = fred("WTREGEN", lag_desc="H.4.1 weekly Thu")
         rrp = fred("RRPONTSYD", lag_desc="FRED daily")
         return _safe(lambda: build_net_liquidity(walcl, tga, rrp, tile_key=key),
-                     key=key, source=source, lag_desc="derived (H.4.1 weekly Thu)")
+                     key=key, source=source, lag_desc="derived (H.4.1 weekly Thu)",
+                     retry=False)
 
     if rest.startswith("fred_sofr_iorb"):
         sofr = fred("SOFR", lag_desc="FRED daily")
         iorb = fred("IORB", lag_desc="FRED daily")
         return _safe(lambda: build_sofr_iorb(sofr, iorb, tile_key=key),
-                     key=key, source=source, lag_desc="derived (FRED daily)")
+                     key=key, source=source, lag_desc="derived (FRED daily)",
+                     retry=False)
 
     return _degraded(key, source, "derived", f"unknown derived recipe '{rest}'")
 
 
-def _safe(fn, *, key: str, source: str, lag_desc: str) -> RawSeries:
-    """Run a fetcher; convert any exception into a degraded RawSeries."""
-    try:
-        result = fn()
-    except Exception as exc:  # noqa: BLE001 — graceful degradation
-        return _degraded(key, source, lag_desc, f"fetch raised: {exc!r}")
-    if not isinstance(result, RawSeries):
-        return _degraded(key, source, lag_desc, "fetcher returned non-RawSeries")
-    return result
+def _safe(fn, *, key: str, source: str, lag_desc: str, retry: bool = True) -> RawSeries:
+    """Run a fetcher; convert any exception into a degraded RawSeries.
+
+    When retry=True (default), retries up to _RETRY_ATTEMPTS times on any
+    exception OR when fn() returns a RawSeries with ok=False (the yfinance
+    empty-frame case). Returns immediately on the first ok=True result. After
+    the final attempt, returns the last degraded result.
+
+    When retry=False (pure-compute wrappers that operate on already-fetched
+    data), fn() is called exactly once — same behaviour as the original _safe.
+
+    Backoff: sleep(_RETRY_BASE_DELAY * _RETRY_FACTOR**attempt) between attempts;
+    no sleep after the final attempt. Timing is patchable in tests via
+    monkeypatching the module-level ``time`` reference (ingest.time.sleep).
+    """
+    attempts = _RETRY_ATTEMPTS if retry else 1
+    last_exc: Optional[Exception] = None
+    last_result: Optional[RawSeries] = None
+
+    for attempt in range(attempts):
+        try:
+            result = fn()
+        except Exception as exc:  # noqa: BLE001 — graceful degradation
+            last_exc = exc
+            last_result = None
+            if attempt < attempts - 1:
+                time.sleep(_RETRY_BASE_DELAY * (_RETRY_FACTOR ** attempt))
+            continue
+
+        if not isinstance(result, RawSeries):
+            # Wrong return type: degrade immediately, no retry.
+            return _degraded(key, source, lag_desc, "fetcher returned non-RawSeries")
+
+        if result.ok:
+            return result
+
+        # ok=False — transient miss; retry if budget remains.
+        last_result = result
+        last_exc = None
+        if attempt < attempts - 1:
+            time.sleep(_RETRY_BASE_DELAY * (_RETRY_FACTOR ** attempt))
+
+    # All attempts exhausted — return last degraded result.
+    if last_exc is not None:
+        return _degraded(key, source, lag_desc, f"fetch raised: {last_exc!r}")
+    if last_result is not None:
+        return last_result
+    # Defensive fallback (should not be reached in practice).
+    return _degraded(key, source, lag_desc, "all retry attempts exhausted")
 
 
 def _degraded(key: str, source: str, lag_desc: str, reason: str) -> RawSeries:
