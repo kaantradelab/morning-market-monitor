@@ -2,6 +2,18 @@
   "schema_version": "1.0.0",
   "days": [
     {
+      "date": "2026-06-27",
+      "run_ts_utc": "2026-06-27T18:17:02Z",
+      "calm_morning": true,
+      "red_count": 1,
+      "card_count": 0,
+      "degraded_sources": [
+        "usd_broad",
+        "vix_term"
+      ],
+      "file": "2026-06-27.json"
+    },
+    {
       "date": "2026-06-26",
       "run_ts_utc": "2026-06-26T14:34:15Z",
       "calm_morning": false,
